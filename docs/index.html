@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SSpotify — Descarga Oficial (Android & Windows)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at top center, #1b3a24 0%, #121212 55%);
+      color: #ffffff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+    }
+    .container { max-width: 760px; width: 100%; text-align: center; }
+    .badge {
+      display: inline-block;
+      background: rgba(29, 185, 84, 0.16);
+      color: #1ed760;
+      border: 1px solid rgba(29, 185, 84, 0.4);
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 18px;
+    }
+    h1 { font-size: clamp(32px, 6vw, 48px); font-weight: 900; letter-spacing: -1px; margin-bottom: 12px; }
+    .subtitle { color: #b3b3b3; font-size: 16px; line-height: 1.5; max-width: 560px; margin: 0 auto 34px; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+      gap: 18px;
+      margin-bottom: 34px;
+    }
+    .card {
+      background: #181818;
+      border: 1px solid #282828;
+      border-radius: 16px;
+      padding: 26px 22px;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: transform 0.18s ease, border-color 0.18s ease;
+    }
+    .card:hover { transform: translateY(-2px); border-color: #1db954; }
+    .card-icon { font-size: 32px; margin-bottom: 10px; }
+    .card h2 { font-size: 20px; margin-bottom: 8px; }
+    .card p { color: #b3b3b3; font-size: 14px; line-height: 1.45; margin-bottom: 20px; }
+    .btn {
+      display: block;
+      width: 100%;
+      text-align: center;
+      text-decoration: none;
+      font-weight: 800;
+      font-size: 15px;
+      padding: 14px 18px;
+      border-radius: 999px;
+      transition: transform 0.12s ease, opacity 0.15s ease;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-green { background: #1db954; color: #000000; }
+    .btn-green:hover { opacity: 0.92; }
+    .btn-light { background: #ffffff; color: #000000; }
+    .btn-light:hover { opacity: 0.92; }
+    .steps {
+      background: #181818;
+      border: 1px solid #282828;
+      border-radius: 16px;
+      padding: 22px;
+      text-align: left;
+    }
+    .steps h3 { font-size: 16px; margin-bottom: 12px; color: #1ed760; }
+    .steps ol { padding-left: 20px; color: #d4d4d4; font-size: 14px; line-height: 1.75; }
+    footer { margin-top: 28px; font-size: 12px; color: #727272; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="badge" id="verBadge">SSpotify • Última versión</div>
+    <h1>Música sin límites, offline y con Google Drive</h1>
+    <p class="subtitle">
+      Descarga tus playlists de Spotify y YouTube en orden exacto, guárdalas en tu celular o PC sin internet y respáldalas en Google Drive.
+    </p>
+
+    <div class="cards">
+      <div class="card">
+        <div>
+          <div class="card-icon">📱</div>
+          <h2>Para Android (Celular)</h2>
+          <p>App autónoma con actualizaciones automáticas, playlists en orden original y modo Celular + Google Drive.</p>
+        </div>
+        <a class="btn btn-green" href="https://github.com/iansitooas/SSpotify-App/releases/latest/download/SSpotify.apk">
+          Descargar SSpotify.apk
+        </a>
+      </div>
+
+      <div class="card">
+        <div>
+          <div class="card-icon">💻</div>
+          <h2>Para Windows (PC)</h2>
+          <p>Instalador automático de 1 clic con descarga MP3 de alta calidad, ecualizador Smart Volume y sincronización Drive.</p>
+        </div>
+        <a class="btn btn-light" href="https://github.com/iansitooas/SSpotify-App/releases/latest/download/SSpotify-Setup.exe">
+          Descargar SSpotify-Setup.exe
+        </a>
+      </div>
+    </div>
+
+    <div class="steps">
+      <h3>Instalación rápida en 3 pasos</h3>
+      <ol>
+        <li>Pulsa el botón verde (Android) o blanco (Windows) arriba para bajar el instalador.</li>
+        <li><strong>Android:</strong> abre <code>SSpotify.apk</code> desde tus descargas y toca <strong>Instalar</strong> (acepta "Orígenes desconocidos" si es tu primera vez).</li>
+        <li><strong>Windows:</strong> haz doble clic en <code>SSpotify-Setup.exe</code>; se instalará automáticamente y creará el acceso directo en tu Escritorio.</li>
+      </ol>
+    </div>
+
+    <footer>SSpotify Official Distribution</footer>
+  </div>
+
+  <script>
+    fetch('./ota/version.json?t=' + Date.now())
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d && d.version) {
+          document.getElementById('verBadge').textContent = 'SSpotify v' + d.version + ' • Descarga Oficial';
+        }
+      })
+      .catch(() => {});
+  </script>
+</body>
+</html>
