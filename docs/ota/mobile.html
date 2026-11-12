@@ -1,0 +1,3785 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>SSpotify</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#121212" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="apple-touch-icon" href="assets/icon.png" />
+  <link rel="icon" type="image/png" href="assets/icon.png" />
+  <style>
+    :root {
+      --sp-bg: #121212;
+      --sp-surface: #1e1e1e;
+      --sp-elevated: #282828;
+      --sp-accent: #1db954;
+      --sp-white: #ffffff;
+      --sp-subdued: #b3b3b3;
+      --sp-border: rgba(255, 255, 255, 0.08);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    body {
+      background: var(--sp-bg);
+      color: var(--sp-white);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+      padding-bottom: calc(130px + var(--safe-bottom));
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(18, 18, 18, 0.96);
+      backdrop-filter: blur(16px);
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--sp-border);
+    }
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--sp-white);
+      letter-spacing: -0.5px;
+    }
+    .header-logo span {
+      color: var(--sp-accent);
+    }
+    .header-badge {
+      background: rgba(29, 185, 84, 0.15);
+      color: var(--sp-accent);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(29, 185, 84, 0.3);
+    }
+    .header-storage-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      outline: none;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .header-storage-btn:active {
+      transform: scale(0.94);
+      background: rgba(29, 185, 84, 0.28);
+    }
+    .header-storage-btn.mode-drive {
+      background: rgba(56, 189, 248, 0.18);
+      color: #38bdf8;
+      border-color: rgba(56, 189, 248, 0.4);
+    }
+    .header-storage-btn.mode-drive:active {
+      background: rgba(56, 189, 248, 0.28);
+    }
+    .header-storage-btn.mode-both {
+      background: rgba(168, 85, 247, 0.2);
+      color: #c084fc;
+      border-color: rgba(168, 85, 247, 0.45);
+    }
+    .header-storage-btn.mode-both:active {
+      background: rgba(168, 85, 247, 0.32);
+    }
+
+    /* MODAL DE ALMACENAMIENTO & GOOGLE DRIVE */
+    .mobile-modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.78);
+      backdrop-filter: blur(6px);
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      animation: fadeInBackdrop 0.2s ease-out;
+    }
+    @keyframes fadeInBackdrop {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .mobile-modal-sheet {
+      background: #181818;
+      border-top-left-radius: 22px;
+      border-top-right-radius: 22px;
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+      max-height: 88vh;
+      overflow-y: auto;
+      padding: 20px 18px calc(24px + var(--safe-bottom));
+      box-shadow: 0 -12px 45px rgba(0, 0, 0, 0.9);
+      animation: slideUpSheet 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes slideUpSheet {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+    .mobile-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+    .mmh-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .mmh-icon {
+      font-size: 24px;
+    }
+    .mmh-title-wrap h3 {
+      font-size: 17px;
+      font-weight: 800;
+      color: #fff;
+      margin: 0;
+    }
+    .mmh-title-wrap p {
+      font-size: 12px;
+      color: var(--sp-subdued);
+      margin: 2px 0 0;
+    }
+    .mmh-close-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: none;
+      color: #fff;
+      font-size: 16px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .mmh-close-btn:active {
+      background: rgba(255, 255, 255, 0.18);
+    }
+    .mobile-modal-body {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .storage-option-card {
+      background: #242424;
+      border: 2px solid transparent;
+      border-radius: 14px;
+      padding: 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+    .storage-option-card:active {
+      transform: scale(0.99);
+    }
+    .storage-option-card.active {
+      border-color: var(--sp-accent);
+      background: rgba(29, 185, 84, 0.08);
+    }
+    .storage-option-card.active.card-drive {
+      border-color: #38bdf8;
+      background: rgba(56, 189, 248, 0.08);
+    }
+    .storage-option-card.active.card-both {
+      border-color: #c084fc;
+      background: rgba(168, 85, 247, 0.1);
+    }
+    .btn-pl-sync-both {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(168, 85, 247, 0.16);
+      color: #c084fc;
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      border-radius: 20px;
+      padding: 8px 14px;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-pl-sync-both:active {
+      transform: scale(0.97);
+      background: rgba(168, 85, 247, 0.28);
+    }
+    .import-pl-banner {
+      margin: 10px 16px 4px;
+      background: linear-gradient(135deg, rgba(29, 185, 84, 0.18), rgba(168, 85, 247, 0.15));
+      border: 1px solid rgba(29, 185, 84, 0.35);
+      border-radius: 14px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .import-pl-banner-meta h4 {
+      margin: 0 0 2px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .import-pl-banner-meta p {
+      margin: 0;
+      font-size: 11.5px;
+      color: var(--sp-subdued);
+    }
+    .import-pl-banner-btn {
+      background: var(--sp-accent);
+      color: #000;
+      border: none;
+      border-radius: 20px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .import-pl-banner-btn:active {
+      transform: scale(0.96);
+    }
+    .soc-top {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .soc-icon {
+      font-size: 26px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .soc-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .soc-header-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .soc-header-row h4 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      margin: 0;
+    }
+    .soc-pill {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 999px;
+      letter-spacing: 0.3px;
+    }
+    .pill-green {
+      background: rgba(29, 185, 84, 0.2);
+      color: #1ed760;
+    }
+    .pill-blue {
+      background: rgba(56, 189, 248, 0.2);
+      color: #38bdf8;
+    }
+    .pill-purple {
+      background: rgba(168, 85, 247, 0.22);
+      color: #c084fc;
+    }
+    .soc-info p {
+      font-size: 12px;
+      color: var(--sp-subdued);
+      line-height: 1.4;
+      margin: 0;
+    }
+    .soc-radio {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+      transition: all 0.2s ease;
+    }
+    .storage-option-card.active .soc-radio {
+      border-color: var(--sp-accent);
+    }
+    .storage-option-card.active.card-drive .soc-radio {
+      border-color: #38bdf8;
+    }
+    .soc-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: transparent;
+      transition: all 0.2s ease;
+    }
+    .storage-option-card.active .soc-dot {
+      background: var(--sp-accent);
+    }
+    .storage-option-card.active.card-drive .soc-dot {
+      background: #38bdf8;
+    }
+    .soc-stats {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 11px;
+      color: var(--sp-subdued);
+    }
+    .soc-stats strong {
+      color: var(--sp-accent);
+    }
+    .mobile-drive-rec-box {
+      margin-top: 12px;
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .mdr-icon {
+      font-size: 16px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .mdr-text {
+      font-size: 11px;
+      line-height: 1.4;
+      color: #fde68a;
+    }
+    .mdr-text strong {
+      color: #fbbf24;
+    }
+    .mdr-text p {
+      margin: 2px 0 0;
+      color: rgba(255, 255, 255, 0.85);
+    }
+    .mobile-drive-account-box {
+      margin-top: 12px;
+      background: #1c1c1c;
+      border-radius: 10px;
+      padding: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .m-drive-status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 12px;
+      color: var(--sp-subdued);
+    }
+    .badge-disconnected {
+      color: #94a3b8;
+      font-weight: 600;
+    }
+    .badge-connected {
+      color: #38bdf8;
+      font-weight: 700;
+    }
+    .m-drive-inputs {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .m-drive-input {
+      width: 100%;
+      background: #2a2a2a;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #fff;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      outline: none;
+      box-sizing: border-box;
+    }
+    .m-drive-input:focus {
+      border-color: #38bdf8;
+    }
+    .btn-connect-drive {
+      background: #fff;
+      color: #121212;
+      border: none;
+      font-weight: 700;
+      font-size: 13px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .btn-connect-drive:active {
+      opacity: 0.85;
+    }
+    .m-drive-connected-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .m-drive-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #0284c7;
+      color: #fff;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .m-drive-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .m-drive-badge {
+      font-size: 10px;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+    .m-drive-email {
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .m-drive-folder {
+      font-size: 11px;
+      color: var(--sp-subdued);
+    }
+    .btn-disconnect-mini {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #f87171;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .mobile-modal-footer {
+      margin-top: 18px;
+      display: flex;
+      gap: 10px;
+    }
+    .btn-save-storage {
+      width: 100%;
+      background: var(--sp-accent);
+      color: #000;
+      border: none;
+      padding: 13px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn-save-storage:active {
+      transform: scale(0.98);
+      background: #1ed760;
+    }
+    .nav-tabs-content {
+      display: none;
+    }
+    .nav-tabs-content.active {
+      display: block;
+    }
+    /* SEARCH VIEW */
+    .search-box {
+      padding: 14px 16px 8px;
+    }
+    .search-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .search-input {
+      width: 100%;
+      background: var(--sp-surface);
+      border: 1px solid var(--sp-border);
+      color: var(--sp-white);
+      padding: 12px 14px 12px 42px;
+      border-radius: 12px;
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-input:focus {
+      border-color: var(--sp-accent);
+    }
+    .search-icon {
+      position: absolute;
+      left: 14px;
+      width: 18px;
+      height: 18px;
+      color: var(--sp-subdued);
+    }
+    /* SPOTIFY GREETING & HEADER ESTILO SPOTIFY */
+    .sp-greeting-row {
+      padding: 18px 16px 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .sp-greeting-text {
+      font-size: 22px;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: -0.5px;
+    }
+
+    /* BIBLIOTECA ESTILO SPOTIFY */
+    .lib-header {
+      padding: 16px 16px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .lib-title-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .lib-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #535353;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .lib-title {
+      font-size: 22px;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: -0.5px;
+    }
+    .lib-actions {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .lib-action-btn {
+      background: transparent;
+      border: none;
+      color: #b3b3b3;
+      cursor: pointer;
+      padding: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      transition: color 0.15s, transform 0.15s;
+    }
+    .lib-action-btn:active {
+      color: #fff;
+      transform: scale(0.9);
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .lib-chips-bar {
+      display: flex;
+      gap: 8px;
+      padding: 4px 16px 14px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .lib-chips-bar::-webkit-scrollbar {
+      display: none;
+    }
+    .lib-chip {
+      background: #2a2a2a;
+      border: none;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 7px 14px;
+      border-radius: 999px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .lib-chip.active {
+      background: #1ed760;
+      color: #000;
+      font-weight: 800;
+    }
+
+    /* PLAYLIST CARD (ITEM DE BIBLIOTECA) */
+    .playlist-item-card {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 10px 16px;
+      cursor: pointer;
+      transition: background 0.15s;
+      border-radius: 8px;
+    }
+    .playlist-item-card:active {
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .pl-thumb {
+      width: 56px;
+      height: 56px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      flex-shrink: 0;
+      overflow: hidden;
+      background: #282828;
+    }
+    .pl-thumb.liked-songs {
+      background: linear-gradient(135deg, #450af5 0%, #8e8ee5 100%);
+      color: #fff;
+    }
+    .pl-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .pl-meta {
+      flex: 1;
+      min-width: 0;
+    }
+    .pl-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 3px;
+    }
+    .pl-subtitle {
+      font-size: 12px;
+      color: #b3b3b3;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .pl-more-btn {
+      background: transparent;
+      border: none;
+      color: #b3b3b3;
+      padding: 8px;
+      cursor: pointer;
+      font-size: 18px;
+    }
+
+    /* VISTA DE DETALLE DE PLAYLIST */
+    .playlist-detail-view {
+      display: none;
+      position: fixed;
+      inset: 0;
+      bottom: calc(58px + var(--safe-bottom));
+      background: #121212;
+      z-index: 95;
+      overflow-y: auto;
+      flex-direction: column;
+      animation: fadeInView 0.2s ease-out;
+    }
+    .playlist-detail-view.open {
+      display: flex;
+    }
+    @keyframes fadeInView {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .pdv-header-bar {
+      position: sticky;
+      top: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      background: rgba(18, 18, 18, 0.95);
+      backdrop-filter: blur(12px);
+      z-index: 10;
+    }
+    .pdv-back-btn, .pdv-opt-btn {
+      background: transparent;
+      border: none;
+      color: #fff;
+      padding: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+    }
+    .pdv-back-btn:active, .pdv-opt-btn:active {
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .pdv-hero {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px 20px 20px;
+      background: linear-gradient(180deg, rgba(30, 215, 96, 0.18) 0%, rgba(18, 18, 18, 0) 100%);
+      text-align: center;
+    }
+    .pdv-cover {
+      width: 140px;
+      height: 140px;
+      border-radius: 8px;
+      box-shadow: 0 14px 35px rgba(0, 0, 0, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 52px;
+      overflow: hidden;
+      margin-bottom: 16px;
+      background: #282828;
+    }
+    .pdv-cover img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .pdv-name {
+      font-size: 22px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+    .pdv-desc {
+      font-size: 13px;
+      color: #b3b3b3;
+      margin-bottom: 6px;
+    }
+    .pdv-meta {
+      font-size: 12px;
+      color: #888;
+    }
+    .pdv-actions-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px 14px;
+    }
+    .btn-add-songs-mini {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #fff;
+      padding: 9px 16px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-add-songs-mini:active {
+      background: rgba(255, 255, 255, 0.18);
+    }
+    .btn-sp-play-fab {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: #1ed760;
+      color: #000;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 8px 22px rgba(30, 215, 96, 0.4);
+      transition: transform 0.15s;
+    }
+    .btn-sp-play-fab:active {
+      transform: scale(0.92);
+    }
+
+    /* MODAL: CREAR PLAYLIST */
+    .modal-create-pl {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 1050;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .mcp-box {
+      width: 100%;
+      max-width: 330px;
+      background: #282828;
+      border-radius: 16px;
+      padding: 24px 20px;
+      text-align: center;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.9);
+      animation: scaleUpModal 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes scaleUpModal {
+      from { transform: scale(0.92); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .mcp-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .mcp-subtitle {
+      font-size: 12px;
+      color: #b3b3b3;
+      margin-bottom: 20px;
+    }
+    .mcp-input {
+      width: 100%;
+      background: #3e3e3e;
+      border: none;
+      border-bottom: 2px solid #1ed760;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      padding: 12px 14px;
+      border-radius: 6px;
+      outline: none;
+      margin-bottom: 24px;
+      box-sizing: border-box;
+      text-align: center;
+    }
+    .mcp-buttons {
+      display: flex;
+      gap: 12px;
+    }
+    .mcp-btn-cancel {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #b3b3b3;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 12px;
+      cursor: pointer;
+    }
+    .mcp-btn-create {
+      flex: 1;
+      background: #1ed760;
+      color: #000;
+      border: none;
+      font-size: 14px;
+      font-weight: 800;
+      padding: 12px;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    .mcp-btn-create:active {
+      transform: scale(0.96);
+    }
+
+    /* MODAL: AGREGAR A PLAYLIST */
+    .modal-add-to-pl {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.78);
+      backdrop-filter: blur(6px);
+      z-index: 1020;
+      display: none;
+      flex-direction: column;
+      justify-content: flex-end;
+    }
+    .matp-sheet {
+      background: #181818;
+      border-top-left-radius: 20px;
+      border-top-right-radius: 20px;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      padding: 20px 16px calc(24px + var(--safe-bottom));
+      box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.9);
+      animation: slideUpSheet 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .matp-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .matp-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #fff;
+    }
+    .btn-new-pl-shortcut {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 8px 14px;
+      border-radius: 999px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .matp-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      overflow-y: auto;
+      max-height: 52vh;
+    }
+    .matp-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .matp-item:active {
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .matp-item.checked {
+      background: rgba(30, 215, 96, 0.1);
+    }
+    .matp-check-box {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #000;
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .matp-item.checked .matp-check-box {
+      background: #1ed760;
+      border-color: #1ed760;
+    }
+
+    /* BOTÓN DE MÁS OPCIONES EN CANCIONES */
+    .btn-more-options {
+      background: transparent;
+      border: none;
+      color: var(--sp-subdued);
+      padding: 6px 8px;
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+    }
+    .btn-more-options:active {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    /* FULLSCREEN PLAYER AGREGAR A PLAYLIST */
+    .mp-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .mp-meta-left {
+      flex: 1;
+      min-width: 0;
+    }
+    .mp-add-pl-btn {
+      background: transparent;
+      border: none;
+      color: #b3b3b3;
+      padding: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+    }
+    .mp-add-pl-btn:active {
+      color: #1ed760;
+      transform: scale(1.1);
+    }
+
+    .section-title {
+      padding: 14px 16px 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--sp-subdued);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .tracks-list {
+      display: flex;
+      flex-direction: column;
+    }
+    .track-card {
+      display: flex;
+      align-items: center;
+      padding: 10px 16px;
+      gap: 12px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .track-card:active {
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .track-card.playing {
+      background: rgba(29, 185, 84, 0.1);
+    }
+    .track-thumb {
+      width: 50px;
+      height: 50px;
+      border-radius: 8px;
+      background: var(--sp-surface);
+      flex-shrink: 0;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--sp-subdued);
+      font-size: 20px;
+    }
+    .track-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .track-meta {
+      flex: 1;
+      min-width: 0;
+    }
+    .track-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--sp-white);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .track-card.playing .track-title {
+      color: var(--sp-accent);
+    }
+    .track-artist {
+      font-size: 13px;
+      color: var(--sp-subdued);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+    .track-right-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .btn-dl {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid var(--sp-border);
+      color: var(--sp-white);
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .btn-dl.saved {
+      background: rgba(29, 185, 84, 0.2);
+      border-color: var(--sp-accent);
+      color: var(--sp-accent);
+    }
+    .btn-del-mini {
+      background: transparent;
+      border: none;
+      color: #f87171;
+      padding: 6px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    /* BOTTOM FLOATING PLAYER BAR */
+    .bottom-player {
+      position: fixed;
+      bottom: calc(64px + var(--safe-bottom));
+      left: 10px;
+      right: 10px;
+      background: #282828;
+      border-radius: 10px;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      z-index: 100;
+      cursor: pointer;
+    }
+    .bottom-player.hidden {
+      display: none;
+    }
+    .bp-thumb {
+      width: 44px;
+      height: 44px;
+      border-radius: 6px;
+      background: #181818;
+      overflow: hidden;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--sp-subdued);
+    }
+    .bp-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .bp-meta {
+      flex: 1;
+      min-width: 0;
+    }
+    .bp-title {
+      font-size: 13.5px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .bp-artist {
+      font-size: 11.5px;
+      color: var(--sp-subdued);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .bp-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    .bp-btn {
+      background: transparent;
+      border: none;
+      color: var(--sp-white);
+      padding: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .bp-play-btn {
+      width: 38px;
+      height: 38px;
+      background: var(--sp-white);
+      color: #000;
+      border-radius: 50%;
+    }
+    .bp-progress {
+      position: absolute;
+      bottom: 0;
+      left: 10px;
+      right: 10px;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .bp-progress-fill {
+      height: 100%;
+      background: var(--sp-accent);
+      width: 0%;
+      transition: width 0.1s linear;
+    }
+    /* BOTTOM NAVIGATION BAR */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: calc(58px + var(--safe-bottom));
+      padding-bottom: var(--safe-bottom);
+      background: rgba(18, 18, 18, 0.98);
+      backdrop-filter: blur(16px);
+      border-top: 1px solid var(--sp-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      z-index: 90;
+    }
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      background: transparent;
+      border: none;
+      color: var(--sp-subdued);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 33.3%;
+      padding: 6px 0;
+      transition: color 0.15s;
+    }
+    .nav-item.active {
+      color: var(--sp-white);
+    }
+    .nav-item svg {
+      width: 22px;
+      height: 22px;
+    }
+    /* FULLSCREEN PLAYER MODAL */
+    .modal-player {
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(180deg, #2b2b2b 0%, #121212 55%);
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      padding: 24px 24px calc(36px + var(--safe-bottom));
+      transform: translateY(100%);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .modal-player.open {
+      transform: translateY(0);
+    }
+    .mp-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .mp-close-btn {
+      background: transparent;
+      border: none;
+      color: var(--sp-white);
+      padding: 8px;
+      cursor: pointer;
+    }
+    .mp-cover {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      max-height: 340px;
+      border-radius: 14px;
+      background: #181818;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+      overflow: hidden;
+      margin: auto auto 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 64px;
+      color: var(--sp-subdued);
+    }
+    .mp-cover img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .mp-meta {
+      margin-bottom: 20px;
+    }
+    .mp-title {
+      font-size: 22px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .mp-artist {
+      font-size: 16px;
+      color: var(--sp-subdued);
+      margin-top: 4px;
+    }
+    .mp-timeline {
+      margin-bottom: 24px;
+    }
+    .mp-slider {
+      width: 100%;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 5px;
+      border-radius: 99px;
+      background: rgba(255, 255, 255, 0.2);
+      outline: none;
+    }
+    .mp-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #ffffff;
+    }
+    .mp-times {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--sp-subdued);
+      margin-top: 6px;
+    }
+    .mp-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+    }
+    .mp-play-fab {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: var(--sp-white);
+      color: #000;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .toast {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #333333;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      z-index: 300;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    .toast.show {
+      opacity: 1;
+    }
+    .empty-state {
+      padding: 50px 20px;
+      text-align: center;
+      color: var(--sp-subdued);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .mobile-storage-notice {
+      margin: 12px 16px 4px;
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.38);
+      border-radius: 12px;
+      padding: 12px 14px;
+      color: #fef3c7;
+      font-size: 12px;
+      line-height: 1.45;
+      animation: fadeIn 0.3s ease;
+    }
+    .msn-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+      font-size: 13px;
+      color: #fbbf24;
+    }
+    .msn-close {
+      background: transparent;
+      border: none;
+      color: #fbbf24;
+      font-size: 15px;
+      cursor: pointer;
+      padding: 2px 6px;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  
+    /* BANNER DE ACTUALIZACIÓN AUTOMÁTICA OTA */
+    .ota-update-banner {
+      margin: 10px 16px 4px;
+      background: linear-gradient(135deg, rgba(29, 185, 84, 0.22) 0%, rgba(21, 136, 62, 0.28) 100%);
+      border: 1px solid rgba(29, 185, 84, 0.5);
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      color: #e5e5e5;
+      animation: slideDownOta 0.3s ease-out;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    }
+    @keyframes slideDownOta {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .oub-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--sp-accent);
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
+    }
+    .oub-content p {
+      font-size: 12px;
+      line-height: 1.4;
+      color: #ffffff;
+      margin: 0;
+    }
+    .oub-action-btn {
+      align-self: flex-end;
+      background: var(--sp-accent);
+      color: #000;
+      font-weight: 700;
+      font-size: 12px;
+      padding: 6px 14px;
+      border: none;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+    .oub-action-btn:active {
+      transform: scale(0.96);
+    }
+    .header-right-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .header-ota-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--sp-border);
+      color: var(--sp-subdued);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+    }
+    .header-ota-btn:active {
+      background: rgba(255, 255, 255, 0.15);
+      color: var(--sp-white);
+    }
+    .header-ota-btn.has-update {
+      border-color: var(--sp-accent);
+      color: var(--sp-accent);
+      animation: pulseUpdate 1.8s infinite;
+    }
+    @keyframes pulseUpdate {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(29, 185, 84, 0.4); }
+      50% { box-shadow: 0 0 0 4px rgba(29, 185, 84, 0); }
+    }
+
+  </style>
+</head>
+<body>
+  <div id="toast" class="toast">Notificación</div>
+
+  <header>
+    <div class="header-logo">
+      <span>SSpotify</span>
+    </div>
+    <div class="header-right-wrap">
+      <button class="header-ota-btn" id="btnCheckMobileUpdates" title="Comprobar actualizaciones">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+        </svg>
+        <span id="otaHeaderVersion">v1.5.9</span>
+      </button>
+      <button class="header-badge header-storage-btn" id="storageBadge" title="Modo de almacenamiento: Celular o Google Drive">
+        <span id="storageBadgeIcon">💾</span>
+        <span id="storageBadgeText">En celular</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- MODAL DE ALMACENAMIENTO & GOOGLE DRIVE (MÓVIL) -->
+  <div id="modalStorageSettings" class="mobile-modal-backdrop" style="display:none;">
+    <div class="mobile-modal-sheet">
+      <div class="mobile-modal-header">
+        <div class="mmh-title-wrap">
+          <span class="mmh-icon">⚙️</span>
+          <div>
+            <h3>Almacenamiento</h3>
+            <p>Elige dónde guardar y reproducir tu música</p>
+          </div>
+        </div>
+        <button type="button" id="btnCloseStorageModal" class="mmh-close-btn" title="Cerrar">✕</button>
+      </div>
+
+      <div class="mobile-modal-body">
+        <!-- OPCIÓN 1: CELULAR (LOCAL) -->
+        <div class="storage-option-card active" id="optCardLocal" data-mode="local">
+          <div class="soc-top">
+            <div class="soc-icon">📱</div>
+            <div class="soc-info">
+              <div class="soc-header-row">
+                <h4>En mi Celular</h4>
+                <span class="soc-pill pill-green">Offline</span>
+              </div>
+              <p>Guarda las canciones en la memoria interna de tu celular para escuchar sin internet y sin gastar datos móviles.</p>
+            </div>
+            <div class="soc-radio">
+              <span class="soc-dot"></span>
+            </div>
+          </div>
+          <div class="soc-stats" id="socLocalStats">
+            Canciones en memoria: <strong id="mobileLocalCount">0</strong>
+          </div>
+        </div>
+
+        <!-- OPCIÓN 2: GOOGLE DRIVE (NUBE) -->
+        <div class="storage-option-card" id="optCardDrive" data-mode="drive">
+          <div class="soc-top">
+            <div class="soc-icon">☁️</div>
+            <div class="soc-info">
+              <div class="soc-header-row">
+                <h4>Google Drive</h4>
+                <span class="soc-pill pill-blue">0 MB en Celular</span>
+              </div>
+              <p>Sincroniza y guarda tus canciones en la nube de Google Drive sin ocupar espacio en tu celular.</p>
+            </div>
+            <div class="soc-radio">
+              <span class="soc-dot"></span>
+            </div>
+          </div>
+
+          <!-- RECOMENDACIÓN DE CUENTA NUEVA -->
+          <div class="mobile-drive-rec-box">
+            <span class="mdr-icon">💡</span>
+            <div class="mdr-text">
+              <strong>Consejo para aprovechar el espacio:</strong>
+              <p>Te sugerimos conectar una <strong>cuenta de Google nueva o secundaria</strong> para tener sus <strong>15 GB gratuitos limpios</strong> dedicados exclusivamente a tu música.</p>
+            </div>
+          </div>
+
+          <!-- DETALLES DE CUENTA DRIVE -->
+          <div class="mobile-drive-account-box" id="mobileDriveAccountBox">
+            <div id="mDriveNotConnected">
+              <div class="m-drive-status-row">
+                <span>Seguridad:</span>
+                <span class="badge-disconnected" id="mDriveStatusLabel">🔒 Verificación requerida</span>
+              </div>
+              <p style="font-size:11px; color:var(--sp-subdued); margin:0 0 10px; line-height:1.4;">
+                Para que nadie pueda acceder al almacenamiento de otra persona, debes identificarte con tu contraseña y permisos oficiales de Google.
+              </p>
+              <div class="m-drive-inputs">
+                <button type="button" class="btn-connect-drive" id="btnConnectMobileDrive">
+                  <svg viewBox="0 0 24 24" width="18" height="18">
+                    <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.8C6.2 7.2 8.9 5 12 5z"/>
+                    <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.6l3.7 2.9c2.2-2 3.7-5 3.7-8.7z"/>
+                    <path fill="#FBBC05" d="M5.3 14.8c-.2-.8-.4-1.6-.4-2.5s.2-1.7.4-2.5L1.6 7C.6 9 0 11.2 0 13.5s.6 4.5 1.6 6.5l3.7-2.9z"/>
+                    <path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.1-6.7-5l-3.7 2.8C3.5 20.9 7.4 24 12 24z"/>
+                  </svg>
+                  <span id="btnConnectDriveText">Verificar con Google (Iniciar sesión)</span>
+                </button>
+              </div>
+            </div>
+
+            <div id="mDriveConnected" style="display:none;">
+              <div class="m-drive-connected-row">
+                <div class="m-drive-avatar" id="mDriveAvatar">G</div>
+                <div class="m-drive-info">
+                  <span class="m-drive-badge">✓ Cuenta verificada con Google</span>
+                  <span class="m-drive-email" id="mDriveEmail">usuario@gmail.com</span>
+                  <span class="m-drive-folder">📁 Mi unidad / SSpotify_Musica</span>
+                </div>
+                <button type="button" class="btn-disconnect-mini" id="btnDisconnectMobileDrive">Cerrar sesión</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- OPCIÓN 3: AMBOS (CELULAR + DRIVE) -->
+        <div class="storage-option-card" id="optCardBoth" data-mode="both">
+          <div class="soc-top">
+            <div class="soc-icon">🔄</div>
+            <div class="soc-info">
+              <div class="soc-header-row">
+                <h4>Ambos (Celular + Drive)</h4>
+                <span class="soc-pill pill-purple">Offline + Nube</span>
+              </div>
+              <p>Guarda las canciones en tu celular para escuchar sin internet Y sincroniza automáticamente un respaldo en tu Google Drive.</p>
+            </div>
+            <div class="soc-radio">
+              <span class="soc-dot"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mobile-modal-footer">
+        <button type="button" class="btn-save-storage" id="btnApplyStorageMode">Listo / Aplicar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BANNER FLOTANTE DE ACTUALIZACIÓN AUTOMÁTICA OTA -->
+  <div id="otaUpdateBanner" class="ota-update-banner" style="display:none;">
+    <div class="oub-content">
+      <span class="oub-badge">✨ ACTUALIZACIÓN v<span id="otaVersionNum">1.5.4</span> DISPONIBLE</span>
+      <p>Se descargó una nueva versión automáticamente. Toca para reiniciar la app al instante sin reinstalar el APK.</p>
+    </div>
+    <button id="btnReloadOtaApp" class="oub-action-btn">Reiniciar y aplicar</button>
+  </div>
+
+  <!-- AVISO DE PRIMERA VEZ (MÓVIL) -->
+  <div id="mobileStorageNotice" class="mobile-storage-notice" style="display:none;">
+    <div class="msn-top">
+      <span>💡 <strong>Aviso de Almacenamiento</strong></span>
+      <button id="btnDismissMobileNotice" class="msn-close" title="Cerrar aviso">✕</button>
+    </div>
+    <p>La música descargada se guarda en la memoria interna de tu celular para escuchar sin internet. En la versión de PC también dispones de Google Drive (te sugerimos usar una cuenta nueva para aprovechar sus 15 GB gratuitos).</p>
+  </div>
+
+  <!-- TAB 1: INICIO / EXPLORAR -->
+  <main id="tabHome" class="nav-tabs-content active">
+    <div class="sp-greeting-row">
+      <div class="sp-greeting-text" id="spGreetingText">Buenas tardes</div>
+    </div>
+    <div class="section-title">
+      <span>Recomendadas para ti</span>
+    </div>
+    <div class="tracks-list" id="homeList">
+      <div class="empty-state">Cargando música destacada...</div>
+    </div>
+  </main>
+
+  <!-- TAB 2: BUSCADOR -->
+  <main id="tabSearch" class="nav-tabs-content">
+    <div class="search-box">
+      <div class="search-input-wrap" style="display:flex; align-items:center; gap:6px;">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" id="searchInput" class="search-input" placeholder="Buscar o pegar link de Spotify / YouTube..." style="flex:1;" />
+        <button type="button" id="btnMobileSearchGo" style="background:#1db954; color:#000; border:none; border-radius:16px; padding:6px 12px; font-size:12px; font-weight:800; cursor:pointer; flex-shrink:0;">Ir</button>
+      </div>
+    </div>
+    <div id="searchPlaylistImportBanner" class="import-pl-banner" style="display:none;">
+      <div class="import-pl-banner-meta">
+        <h4 id="ipbTitle">Playlist detectada</h4>
+        <p id="ipbSubtitle">0 canciones en orden original</p>
+      </div>
+      <button type="button" id="btnImportPlaylistMobile" class="import-pl-banner-btn">↓ Importar Playlist</button>
+    </div>
+    <div class="section-title" id="searchResultsHeader">Resultados</div>
+    <div class="tracks-list" id="searchResultsList">
+      <div class="empty-state">Escribe un nombre, artista o pega un enlace de Spotify arriba.</div>
+    </div>
+  </main>
+
+  <!-- TAB 3: TU BIBLIOTECA (PLAYLISTS & DESCARGAS ESTILO SPOTIFY) -->
+  <main id="tabLibrary" class="nav-tabs-content">
+    <div class="lib-header">
+      <div class="lib-title-row">
+        <div class="lib-avatar" id="libAvatar">S</div>
+        <div class="lib-title">Tu biblioteca</div>
+      </div>
+      <div class="lib-actions">
+        <button type="button" class="lib-action-btn" id="btnOpenCreatePlaylist" title="Crear nueva playlist">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- CHIPS DE FILTRO ESTILO SPOTIFY -->
+    <div class="lib-chips-bar">
+      <button type="button" class="lib-chip active" data-filter="all">Todo</button>
+      <button type="button" class="lib-chip" data-filter="playlists">Playlists</button>
+      <button type="button" class="lib-chip" data-filter="downloaded">Descargas</button>
+    </div>
+
+    <!-- LISTA PRINCIPAL DE BIBLIOTECA (PLAYLISTS & CANCIONES) -->
+    <div class="tracks-list" id="libraryList">
+      <!-- Se inyecta dinámicamente -->
+    </div>
+  </main>
+
+  <!-- VISTA DE DETALLE DE PLAYLIST (ESTILO SPOTIFY) -->
+  <div class="playlist-detail-view" id="viewPlaylistDetail">
+    <div class="pdv-header-bar">
+      <button type="button" class="pdv-back-btn" id="btnBackFromPlaylist" title="Volver a la biblioteca">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+      </button>
+      <div class="pdv-actions-right">
+        <button type="button" class="pdv-opt-btn" id="btnPlaylistOptions" title="Opciones de playlist">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+            <circle cx="12" cy="5" r="2"></circle>
+            <circle cx="12" cy="12" r="2"></circle>
+            <circle cx="12" cy="19" r="2"></circle>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="pdv-hero">
+      <div class="pdv-cover" id="pdvCover">🎵</div>
+      <div class="pdv-name" id="pdvName">Nombre de la playlist</div>
+      <div class="pdv-desc" id="pdvDesc">Playlist creada por ti</div>
+      <div class="pdv-meta" id="pdvMeta">0 canciones</div>
+    </div>
+
+    <div class="pdv-actions-row">
+      <button type="button" class="btn-add-songs-mini" id="btnAddSongsToPl">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        <span>Agregar</span>
+      </button>
+      <button type="button" class="btn-pl-sync-both" id="btnSyncPlBoth" title="Guardar en tu Celular (Offline) y respaldar en Google Drive">
+        <span>🔄 Ambos (Cel + Drive)</span>
+      </button>
+      <button type="button" class="btn-sp-play-fab" id="btnPlayAllPlaylist" title="Reproducir playlist">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+          <polygon points="6 4 20 12 6 20 6 4"></polygon>
+        </svg>
+      </button>
+    </div>
+
+    <div class="tracks-list" id="pdvTracksList">
+      <!-- Canciones de la playlist -->
+    </div>
+  </div>
+
+  <!-- MODAL: CREAR PLAYLIST (SPOTIFY STYLE) -->
+  <div class="modal-create-pl" id="modalCreatePlaylist">
+    <div class="mcp-box">
+      <div class="mcp-title">Ponle un nombre a tu playlist</div>
+      <div class="mcp-subtitle">Crea una lista para cualquier momento del día</div>
+      <input type="text" id="createPlaylistInput" class="mcp-input" placeholder="Mi playlist nº 1" maxlength="40" />
+      <div class="mcp-buttons">
+        <button type="button" class="mcp-btn-cancel" id="btnCancelCreatePlaylist">Cancelar</button>
+        <button type="button" class="mcp-btn-create" id="btnConfirmCreatePlaylist">Crear</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: AGREGAR A PLAYLIST (BOTTOM SHEET SPOTIFY) -->
+  <div class="modal-add-to-pl" id="modalAddToPlaylist">
+    <div class="matp-sheet">
+      <div class="matp-header">
+        <div class="matp-title">Agregar a la playlist</div>
+        <button type="button" class="btn-new-pl-shortcut" id="btnNewPlaylistFromAdd">
+          <span>+</span>
+          <span>Nueva playlist</span>
+        </button>
+      </div>
+      <div class="matp-list" id="matpPlaylistsList">
+        <!-- Lista de playlists -->
+      </div>
+    </div>
+  </div>
+
+  <!-- FLOATING BOTTOM PLAYER BAR -->
+  <div class="bottom-player hidden" id="bottomPlayer">
+    <div class="bp-progress">
+      <div class="bp-progress-fill" id="bpProgressFill"></div>
+    </div>
+    <div class="bp-thumb" id="bpThumb">♫</div>
+    <div class="bp-meta" id="bpMeta">
+      <div class="bp-title" id="bpTitle">Título</div>
+      <div class="bp-artist" id="bpArtist">Artista</div>
+    </div>
+    <div class="bp-controls">
+      <button class="bp-btn bp-play-btn" id="bpPlayPause">
+        <svg id="bpIconPlay" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <polygon points="6 4 20 12 6 20 6 4"></polygon>
+        </svg>
+        <svg id="bpIconPause" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style="display:none;">
+          <rect x="6" y="4" width="4" height="16"></rect>
+          <rect x="14" y="4" width="4" height="16"></rect>
+        </svg>
+      </button>
+      <button class="bp-btn" id="bpNext">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="5 4 15 12 5 20 5 4"></polygon>
+          <line x1="19" y1="5" x2="19" y2="19"></line>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAVIGATION BAR -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" data-tab="tabHome">
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+      </svg>
+      <span>Inicio</span>
+    </button>
+    <button class="nav-item" data-tab="tabSearch">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <span>Buscar</span>
+    </button>
+    <button class="nav-item" data-tab="tabLibrary">
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 10l-5-3.27v6.54L18 12z"/>
+      </svg>
+      <span>Tu Biblioteca</span>
+    </button>
+  </nav>
+
+  <!-- FULLSCREEN PLAYER MODAL -->
+  <div class="modal-player" id="modalPlayer">
+    <div class="mp-header">
+      <button class="mp-close-btn" id="mpCloseBtn">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+      <span style="font-size:13px; font-weight:700; text-transform:uppercase; color:var(--sp-subdued);">Reproduciendo</span>
+      <div style="width:26px;"></div>
+    </div>
+    <div class="mp-cover" id="mpCover">♫</div>
+    <div class="mp-meta">
+      <div class="mp-meta-left">
+        <div class="mp-title" id="mpTitle">Título</div>
+        <div class="mp-artist" id="mpArtist">Artista</div>
+      </div>
+      <button class="mp-add-pl-btn" id="mpAddCurrentToPlaylist" title="Agregar a playlist">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="16"></line>
+          <line x1="8" y1="12" x2="16" y2="12"></line>
+        </svg>
+      </button>
+    </div>
+    <div class="mp-timeline">
+      <input type="range" class="mp-slider" id="mpSeekSlider" min="0" max="100" value="0" step="0.1" />
+      <div class="mp-times">
+        <span id="mpCurrentTime">0:00</span>
+        <span id="mpTotalTime">0:00</span>
+      </div>
+    </div>
+    <div class="mp-controls">
+      <button class="bp-btn" id="mpPrev">
+        <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="19 20 9 12 19 4 19 20"></polygon>
+          <line x1="5" y1="19" x2="5" y2="5"></line>
+        </svg>
+      </button>
+      <button class="mp-play-fab" id="mpPlayFab">
+        <svg id="mpIconPlay" viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
+          <polygon points="6 4 20 12 6 20 6 4"></polygon>
+        </svg>
+        <svg id="mpIconPause" viewBox="0 0 24 24" width="28" height="28" fill="currentColor" style="display:none;">
+          <rect x="6" y="4" width="4" height="16"></rect>
+          <rect x="14" y="4" width="4" height="16"></rect>
+        </svg>
+      </button>
+      <button class="bp-btn" id="mpNext">
+        <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="5 4 15 12 5 20 5 4"></polygon>
+          <line x1="19" y1="5" x2="19" y2="19"></line>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <audio id="audioEl" preload="auto"></audio>
+
+  <script>
+    // ==================== INDEXEDDB OFFLINE STORAGE ENGINE ====================
+    const DB_NAME = 'SSpotifyMobileDB';
+    const DB_VERSION = 1;
+    let db = null;
+
+    function initDb() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = (e) => {
+          const d = e.target.result;
+          if (!d.objectStoreNames.contains('tracks')) {
+            d.createObjectStore('tracks', { keyPath: 'id' });
+          }
+          if (!d.objectStoreNames.contains('audioBlobs')) {
+            d.createObjectStore('audioBlobs', { keyPath: 'id' });
+          }
+        };
+        req.onsuccess = (e) => {
+          db = e.target.result;
+          resolve(db);
+        };
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function getSavedTracks() {
+      if (!db) await initDb();
+      return new Promise((resolve) => {
+        const tx = db.transaction('tracks', 'readonly');
+        const req = tx.objectStore('tracks').getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => resolve([]);
+      });
+    }
+
+    async function saveTrackOffline(track, audioBlob) {
+      if (!db) await initDb();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(['tracks', 'audioBlobs'], 'readwrite');
+        tx.objectStore('tracks').put(track);
+        if (audioBlob) {
+          tx.objectStore('audioBlobs').put({ id: track.id, blob: audioBlob });
+        }
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+
+    async function deleteTrackOffline(trackId) {
+      if (!db) await initDb();
+      return new Promise((resolve) => {
+        const tx = db.transaction(['tracks', 'audioBlobs'], 'readwrite');
+        tx.objectStore('tracks').delete(trackId);
+        tx.objectStore('audioBlobs').delete(trackId);
+        tx.oncomplete = () => resolve(true);
+      });
+    }
+
+    async function getAudioBlob(trackId) {
+      if (!db) await initDb();
+      return new Promise((resolve) => {
+        const tx = db.transaction('audioBlobs', 'readonly');
+        const req = tx.objectStore('audioBlobs').get(trackId);
+        req.onsuccess = () => resolve(req.result ? req.result.blob : null);
+        req.onerror = () => resolve(null);
+      });
+    }
+
+    // ==================== APP STATE & AUDIO ENGINE ====================
+    let savedTracks = [];
+    let currentQueue = [];
+    let currentIndex = -1;
+    let currentObjectUrl = null;
+
+    const audio = document.getElementById('audioEl');
+    const bottomPlayer = document.getElementById('bottomPlayer');
+    const bpThumb = document.getElementById('bpThumb');
+    const bpTitle = document.getElementById('bpTitle');
+    const bpArtist = document.getElementById('bpArtist');
+    const bpProgressFill = document.getElementById('bpProgressFill');
+    const bpPlayPause = document.getElementById('bpPlayPause');
+    const bpIconPlay = document.getElementById('bpIconPlay');
+    const bpIconPause = document.getElementById('bpIconPause');
+    const bpNext = document.getElementById('bpNext');
+
+    const modalPlayer = document.getElementById('modalPlayer');
+    const mpCloseBtn = document.getElementById('mpCloseBtn');
+    const mpCover = document.getElementById('mpCover');
+    const mpTitle = document.getElementById('mpTitle');
+    const mpArtist = document.getElementById('mpArtist');
+    const mpSeekSlider = document.getElementById('mpSeekSlider');
+    const mpCurrentTime = document.getElementById('mpCurrentTime');
+    const mpTotalTime = document.getElementById('mpTotalTime');
+    const mpPlayFab = document.getElementById('mpPlayFab');
+    const mpIconPlay = document.getElementById('mpIconPlay');
+    const mpIconPause = document.getElementById('mpIconPause');
+    const mpPrev = document.getElementById('mpPrev');
+    const mpNext = document.getElementById('mpNext');
+
+    function showToast(text) {
+      const t = document.getElementById('toast');
+      t.textContent = text;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2400);
+    }
+
+    function formatDuration(sec) {
+      if (!sec || isNaN(sec)) return '0:00';
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      return `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    function buildFullAudioProxyUrl(track) {
+      try {
+        if (!window.SSpotifyNative || typeof window.SSpotifyNative.hasFullAudioProxy !== 'function' || !window.SSpotifyNative.hasFullAudioProxy()) {
+          return '';
+        }
+        const idStr = String(track?.id || '');
+        const ytId = (idStr.startsWith('yt_') && idStr.length === 14) ? idStr.slice(3) : '';
+        const artistRaw = String(track?.artist || '').trim();
+        const cleanArtist = /^(?:artista|spotify|youtube)$/i.test(artistRaw) ? '' : artistRaw;
+        const q = `${cleanArtist} ${track?.title || ''}`.trim();
+        if (!ytId && !q) return '';
+        return `https://appassets.androidplatform.net/full-audio?v=${encodeURIComponent(ytId)}&q=${encodeURIComponent(q)}`;
+      } catch {
+        return '';
+      }
+    }
+
+    async function fetchPreviewFallbackUrl(track) {
+      let url = track?.previewUrl || '';
+      if (!url && track?.id && !String(track.id).startsWith('sp_') && !String(track.id).startsWith('yt_')) {
+        try {
+          const res = await fetch(`https://itunes.apple.com/lookup?id=${track.id}`);
+          const json = await res.json();
+          url = json.results?.[0]?.previewUrl || '';
+        } catch {}
+      }
+      if (!url && track?.title) {
+        try {
+          const q = `${track.artist || ''} ${track.title}`.trim();
+          const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=1`);
+          const json = await res.json();
+          const hit = json.results?.[0];
+          if (hit) {
+            url = hit.previewUrl || '';
+            if (!track.thumbnail && hit.artworkUrl100) track.thumbnail = hit.artworkUrl100.replace('100x100', '300x300');
+          }
+        } catch {}
+      }
+      return url;
+    }
+
+    // ==================== REPRODUCCIÓN & ANDROID MEDIASESSION ====================
+    async function playTrackByIndex(idx) {
+      if (idx < 0 || idx >= currentQueue.length) return;
+      currentIndex = idx;
+      const track = currentQueue[currentIndex];
+
+      if (currentObjectUrl) {
+        URL.revokeObjectURL(currentObjectUrl);
+        currentObjectUrl = null;
+      }
+
+      // 1. Probar si está guardado en el celular (IndexedDB)
+      const offlineBlob = await getAudioBlob(track.id);
+      if (offlineBlob) {
+        currentObjectUrl = URL.createObjectURL(offlineBlob);
+        audio.src = currentObjectUrl;
+      } else {
+        const fullUrl = buildFullAudioProxyUrl(track);
+        if (fullUrl) {
+          audio.src = fullUrl;
+        } else if (track.streamUrl && !/mzstatic\.com/i.test(track.streamUrl)) {
+          audio.src = track.streamUrl;
+        } else {
+          showToast('Cargando audio...');
+          audio.src = (await fetchPreviewFallbackUrl(track)) || '';
+        }
+      }
+
+      audio.play().catch(() => {});
+      updateUIForTrack(track);
+
+      // Notificación de Android y Controles de Pantalla de Bloqueo
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: track.title,
+          artist: track.artist,
+          album: 'SSpotify Offline',
+          artwork: track.thumbnail ? [{ src: track.thumbnail, sizes: '512x512', type: 'image/jpeg' }] : []
+        });
+
+        navigator.mediaSession.setActionHandler('play', () => audio.play());
+        navigator.mediaSession.setActionHandler('pause', () => audio.pause());
+        navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
+        navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
+      }
+    }
+
+    function updateUIForTrack(t) {
+      bottomPlayer.classList.remove('hidden');
+      bpThumb.innerHTML = t.thumbnail ? `<img src="${t.thumbnail}" alt="" />` : '♫';
+      bpTitle.textContent = t.title;
+      bpArtist.textContent = t.artist;
+
+      mpCover.innerHTML = t.thumbnail ? `<img src="${t.thumbnail}" alt="" />` : '♫';
+      mpTitle.textContent = t.title;
+      mpArtist.textContent = t.artist;
+      updatePlayIcons(true);
+      renderAllViews();
+    }
+
+    function updatePlayIcons(playing) {
+      bpIconPlay.style.display = playing ? 'none' : 'block';
+      bpIconPause.style.display = playing ? 'block' : 'none';
+      mpIconPlay.style.display = playing ? 'none' : 'block';
+      mpIconPause.style.display = playing ? 'block' : 'none';
+    }
+
+    function togglePlay() {
+      if (!audio.src) return;
+      if (audio.paused) {
+        audio.play().catch(() => {});
+        updatePlayIcons(true);
+      } else {
+        audio.pause();
+        updatePlayIcons(false);
+      }
+    }
+
+    function playNext() {
+      if (!currentQueue.length) return;
+      playTrackByIndex((currentIndex + 1) % currentQueue.length);
+    }
+
+    function playPrev() {
+      if (audio.currentTime > 3) {
+        audio.currentTime = 0;
+      } else if (currentIndex > 0) {
+        playTrackByIndex(currentIndex - 1);
+      }
+    }
+
+    bpPlayPause.onclick = (e) => { e.stopPropagation(); togglePlay(); };
+    mpPlayFab.onclick = () => togglePlay();
+    bpNext.onclick = (e) => { e.stopPropagation(); playNext(); };
+    mpNext.onclick = () => playNext();
+    mpPrev.onclick = () => playPrev();
+
+    audio.onplay = () => updatePlayIcons(true);
+    audio.onpause = () => updatePlayIcons(false);
+    audio.onended = () => playNext();
+
+    audio.ontimeupdate = () => {
+      if (!isNaN(audio.duration) && audio.duration > 0) {
+        const pct = (audio.currentTime / audio.duration) * 100;
+        bpProgressFill.style.width = `${pct}%`;
+        mpSeekSlider.value = pct;
+        mpCurrentTime.textContent = formatDuration(audio.currentTime);
+        mpTotalTime.textContent = formatDuration(audio.duration);
+      }
+    };
+
+    mpSeekSlider.oninput = () => {
+      if (!isNaN(audio.duration)) {
+        audio.currentTime = (mpSeekSlider.value / 100) * audio.duration;
+      }
+    };
+
+    bottomPlayer.onclick = () => modalPlayer.classList.add('open');
+    mpCloseBtn.onclick = () => modalPlayer.classList.remove('open');
+
+    function getValidMobileDriveToken(forceRefresh = false) {
+      try {
+        if (forceRefresh && window.SSpotifyNative?.refreshGoogleDriveToken) {
+          return window.SSpotifyNative.refreshGoogleDriveToken() || '';
+        }
+        if (window.SSpotifyNative?.getGoogleDriveToken) {
+          return window.SSpotifyNative.getGoogleDriveToken() || '';
+        }
+      } catch {}
+      return '';
+    }
+
+    async function uploadBlobToMobileDrive(track, blob) {
+      try {
+        let token = getValidMobileDriveToken(false);
+        if (!token) return '';
+
+        const doDriveFetch = async (url, options = {}) => {
+          let res = await fetch(url, {
+            ...options,
+            headers: { ...(options.headers || {}), Authorization: 'Bearer ' + token }
+          });
+          if (res.status === 401) {
+            const fresh = getValidMobileDriveToken(true);
+            if (fresh && fresh !== token) {
+              token = fresh;
+              res = await fetch(url, {
+                ...options,
+                headers: { ...(options.headers || {}), Authorization: 'Bearer ' + token }
+              });
+            }
+          }
+          return res;
+        };
+
+        let folderId = localStorage.getItem('sspotify_mobile_drive_folder_id')
+          || (window.SSpotifyNative?.getDriveFolderId ? window.SSpotifyNative.getDriveFolderId() : '')
+          || '';
+        if (!folderId) {
+          const searchRes = await doDriveFetch("https://www.googleapis.com/drive/v3/files?q=" + encodeURIComponent("name='SSpotify_Musica' and mimeType='application/vnd.google-apps.folder' and trashed=false") + "&fields=files(id,name)");
+          if (searchRes.ok) {
+            const searchJson = await searchRes.json();
+            if (searchJson.files && searchJson.files.length > 0) {
+              folderId = searchJson.files[0].id;
+            }
+          }
+          if (!folderId) {
+            const createRes = await doDriveFetch("https://www.googleapis.com/drive/v3/files", {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: 'SSpotify_Musica', mimeType: 'application/vnd.google-apps.folder' })
+            });
+            if (createRes.ok) {
+              const createJson = await createRes.json();
+              folderId = createJson.id || '';
+            }
+          }
+          if (folderId) {
+            localStorage.setItem('sspotify_mobile_drive_folder_id', folderId);
+            try { window.SSpotifyNative?.setDriveFolderId?.(folderId); } catch {}
+          }
+        }
+
+        const safeName = `${track.artist || 'Artista'} - ${track.title || 'Cancion'}`.replace(/[\\/:*?"<>|]/g, '').trim() + '.m4a';
+        const metadata = { name: safeName };
+        if (folderId) metadata.parents = [folderId];
+
+        const buildForm = () => {
+          const f = new FormData();
+          f.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+          f.append('file', blob);
+          return f;
+        };
+
+        const uploadRes = await doDriveFetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+          method: 'POST',
+          body: buildForm()
+        });
+        if (uploadRes.ok) {
+          const upJson = await uploadRes.json();
+          return upJson.id || '';
+        }
+      } catch {}
+      return '';
+    }
+
+    // ==================== DESCARGA OFFLINE AL CELULAR & GOOGLE DRIVE ====================
+    async function handleDownloadTrack(track, btnEl, forcedMode = '') {
+      const mode = forcedMode || currentStorageMode || 'local';
+      const existingSaved = savedTracks.find(t => t.id === track.id);
+      if (existingSaved && !forcedMode) {
+        // Eliminar del celular
+        await deleteTrackOffline(track.id);
+        savedTracks = await getSavedTracks();
+        showToast(`🗑️ "${track.title}" eliminada de tu celular.`);
+        renderAllViews();
+        return;
+      }
+
+      if (btnEl) btnEl.textContent = 'Descargando...';
+      try {
+        let blob = null;
+        let usedSourceUrl = '';
+        let downloadedFull = false;
+        let lastErr = '';
+
+        // 1. Descargar canción completa vía proxy nativo Android v1.5.14+ (YouTube VISIONOS + caché verificada a disco)
+        const fullUrl = buildFullAudioProxyUrl(track);
+        if (fullUrl) {
+          try {
+            const fullRes = await fetch(fullUrl);
+            if (fullRes.ok) {
+              const candidate = await fullRes.blob();
+              if (candidate && candidate.size > 50000) {
+                blob = candidate;
+                usedSourceUrl = fullUrl;
+                downloadedFull = true;
+              } else {
+                lastErr = `Audio incompleto (${candidate ? candidate.size : 0} bytes)`;
+              }
+            } else {
+              lastErr = fullRes.headers.get('X-SSpotify-Error')
+                || (window.SSpotifyNative?.getLastFullAudioError ? window.SSpotifyNative.getLastFullAudioError() : '')
+                || `HTTP ${fullRes.status}`;
+            }
+          } catch (e) {
+            lastErr = e?.message || 'Error leyendo proxy nativo';
+          }
+        } else if (window.SSpotifyNative && typeof window.SSpotifyNative.fetchUrl === 'function') {
+          // 1b. Respaldo OTA para APKs previos (v1.5.10-v1.5.13) vía JioSaavn (CORS *)
+          try {
+            const artistRaw = String(track?.artist || '').trim();
+            const cleanArtist = /^(?:artista|spotify|youtube)$/i.test(artistRaw) ? '' : artistRaw;
+            const q = `${cleanArtist} ${track?.title || ''}`.trim();
+            if (q) {
+              const sRaw = window.SSpotifyNative.fetchUrl(`https://www.jiosaavn.com/api.php?__call=search.getResults&p=1&q=${encodeURIComponent(q)}&_format=json&_marker=0&api_version=4&ctx=web6dot0`);
+              const sJson = sRaw ? JSON.parse(sRaw) : null;
+              const enc = sJson?.results?.[0]?.more_info?.encrypted_media_url || '';
+              if (enc) {
+                const aRaw = window.SSpotifyNative.fetchUrl(`https://www.jiosaavn.com/api.php?__call=song.generateAuthToken&url=${encodeURIComponent(enc)}&bitrate=128&api_version=4&_format=json&ctx=web6dot0&_marker=0`);
+                const aJson = aRaw ? JSON.parse(aRaw) : null;
+                if (aJson?.auth_url) {
+                  const sRes = await fetch(aJson.auth_url);
+                  if (sRes.ok) {
+                    const candidate = await sRes.blob();
+                    if (candidate && candidate.size > 200000) {
+                      blob = candidate;
+                      usedSourceUrl = aJson.auth_url;
+                      downloadedFull = true;
+                    }
+                  }
+                }
+              }
+            }
+          } catch {}
+        }
+
+        // 2. Nunca guardar en silencio un preview de 30s sin avisar por qué falló el audio completo
+        if (!blob) {
+          if (!fullUrl) {
+            showToast('⚠️ Instala el nuevo SSpotify.apk (v1.5.15) para descargar canciones completas (no solo 30s)');
+            if (btnEl) btnEl.textContent = '↓ Guardar';
+            return;
+          }
+          throw new Error(lastErr || 'No se pudo descargar la canción completa');
+        }
+
+        let driveFileId = existingSaved?.driveFileId || '';
+        if ((mode === 'drive' || mode === 'both') && driveAccountEmail) {
+          driveFileId = await uploadBlobToMobileDrive(track, blob);
+        }
+
+        const trackToSave = {
+          id: track.id,
+          title: track.title,
+          artist: track.artist,
+          thumbnail: track.thumbnail,
+          duration: track.duration,
+          streamUrl: downloadedFull ? '' : usedSourceUrl,
+          previewUrl: track.previewUrl || '',
+          storageMode: mode,
+          driveFileId: driveFileId,
+          savedAt: Date.now()
+        };
+
+        await saveTrackOffline(trackToSave, blob);
+        cacheTrack(trackToSave);
+        savedTracks = await getSavedTracks();
+        if (!forcedMode) {
+          if (mode === 'both') {
+            showToast(`🔄 "${track.title}" guardada en celular y respaldada en Google Drive.`);
+          } else if (mode === 'drive') {
+            showToast(`☁️ "${track.title}" sincronizada con Google Drive.`);
+          } else {
+            showToast(`💾 "${track.title}" guardada en tu celular.`);
+          }
+        }
+        renderAllViews();
+      } catch (err) {
+        if (!forcedMode) showToast(`⚠️ ${err?.message || 'No se pudo descargar en este momento'}`);
+        if (btnEl) btnEl.textContent = '↓ Guardar';
+      }
+    }
+
+    // ==================== SISTEMA DE PLAYLISTS & CATÁLOGO (ESTILO SPOTIFY) ====================
+    let playlists = [];
+    let trackCatalog = {};
+    let activePlaylistId = null;
+    let libFilter = 'all'; // 'all' | 'playlists' | 'downloaded'
+
+    function loadPlaylists() {
+      try {
+        const raw = localStorage.getItem('sspotify_mobile_playlists');
+        playlists = raw ? JSON.parse(raw) : [];
+      } catch {
+        playlists = [];
+      }
+      if (!playlists || !playlists.length) {
+        playlists = [
+          {
+            id: 'pl_favoritas',
+            name: 'Mis Favoritas',
+            description: 'Playlist de canciones favoritas',
+            trackIds: [],
+            createdAt: Date.now()
+          }
+        ];
+        savePlaylists();
+      }
+
+      try {
+        const rawCat = localStorage.getItem('sspotify_mobile_track_catalog');
+        trackCatalog = rawCat ? JSON.parse(rawCat) : {};
+      } catch {
+        trackCatalog = {};
+      }
+    }
+
+    function savePlaylists() {
+      try {
+        localStorage.setItem('sspotify_mobile_playlists', JSON.stringify(playlists));
+      } catch {}
+    }
+
+    function cacheTrack(t) {
+      if (!t || !t.id) return;
+      trackCatalog[t.id] = {
+        id: t.id,
+        title: t.title,
+        artist: t.artist,
+        thumbnail: t.thumbnail,
+        duration: t.duration,
+        streamUrl: t.streamUrl || t.previewUrl,
+        previewUrl: t.previewUrl
+      };
+      try {
+        localStorage.setItem('sspotify_mobile_track_catalog', JSON.stringify(trackCatalog));
+      } catch {}
+    }
+
+    function openCreatePlaylistModal() {
+      const modal = document.getElementById('modalCreatePlaylist');
+      const input = document.getElementById('createPlaylistInput');
+      if (input) input.value = `Mi playlist nº ${playlists.length + 1}`;
+      if (modal) modal.style.display = 'flex';
+      setTimeout(() => input?.focus(), 150);
+    }
+
+    function handleCreatePlaylistConfirm() {
+      const input = document.getElementById('createPlaylistInput');
+      const name = (input?.value || '').trim() || `Mi playlist nº ${playlists.length + 1}`;
+      const newPl = {
+        id: 'pl_' + Date.now(),
+        name,
+        description: 'Playlist creada por ti',
+        trackIds: [],
+        createdAt: Date.now()
+      };
+      playlists.unshift(newPl);
+      savePlaylists();
+      document.getElementById('modalCreatePlaylist').style.display = 'none';
+      showToast(`✓ Playlist "${name}" creada`);
+      renderLibraryView();
+      openPlaylistDetail(newPl.id);
+    }
+
+    function openPlaylistDetail(playlistId) {
+      activePlaylistId = playlistId;
+      const pl = playlists.find(p => p.id === playlistId);
+      if (!pl) return;
+
+      const view = document.getElementById('viewPlaylistDetail');
+      document.getElementById('pdvName').textContent = pl.name;
+      document.getElementById('pdvDesc').textContent = pl.description || 'Playlist creada por ti';
+      document.getElementById('pdvMeta').textContent = `${pl.trackIds.length} canciones`;
+
+      const container = document.getElementById('pdvTracksList');
+      container.innerHTML = '';
+      if (!pl.trackIds.length) {
+        container.innerHTML = `<div class="empty-state">Esta playlist aún no tiene canciones.<br>Busca música y toca "⋮" para agregar aquí.</div>`;
+      } else {
+        const plTracks = pl.trackIds.map(id => trackCatalog[id] || savedTracks.find(t => t.id === id) || { id, title: 'Canción ' + id, artist: 'Desconocido' });
+        plTracks.forEach((t, idx) => {
+          container.appendChild(createTrackRow(t, plTracks, idx, { inPlaylistId: pl.id }));
+        });
+      }
+
+      view.classList.add('open');
+    }
+
+    function openPlaylistOptionsMenu(playlistId) {
+      const pl = playlists.find(p => p.id === playlistId);
+      if (!pl) return;
+      const confirmed = confirm(`Opciones para "${pl.name}":\n\n¿Deseas eliminar esta playlist?`);
+      if (confirmed) {
+        playlists = playlists.filter(p => p.id !== playlistId);
+        savePlaylists();
+        showToast(`🗑️ Playlist "${pl.name}" eliminada`);
+        document.getElementById('viewPlaylistDetail')?.classList.remove('open');
+        renderLibraryView();
+      }
+    }
+
+    let trackToAddPending = null;
+    function openAddToPlaylistModal(track, options = {}) {
+      trackToAddPending = track;
+      cacheTrack(track);
+      const modal = document.getElementById('modalAddToPlaylist');
+      const list = document.getElementById('matpPlaylistsList');
+      list.innerHTML = '';
+
+      if (options.inPlaylistId) {
+        const removeRow = document.createElement('div');
+        removeRow.className = 'matp-item';
+        removeRow.style.color = '#f87171';
+        removeRow.innerHTML = `
+          <div class="pl-thumb" style="background:rgba(239, 68, 68, 0.15); color:#f87171;">✕</div>
+          <div class="pl-meta">
+            <div class="pl-title" style="color:#f87171;">Quitar de esta playlist</div>
+            <div class="pl-subtitle">Remover la canción de la lista actual</div>
+          </div>
+        `;
+        removeRow.onclick = () => {
+          const pl = playlists.find(p => p.id === options.inPlaylistId);
+          if (pl) {
+            pl.trackIds = pl.trackIds.filter(id => id !== track.id);
+            savePlaylists();
+            showToast(`Canción eliminada de "${pl.name}"`);
+            modal.style.display = 'none';
+            openPlaylistDetail(pl.id);
+            renderLibraryView();
+          }
+        };
+        list.appendChild(removeRow);
+      }
+
+      playlists.forEach(pl => {
+        const isAlreadyIn = pl.trackIds.includes(track.id);
+        const item = document.createElement('div');
+        item.className = `matp-item ${isAlreadyIn ? 'checked' : ''}`;
+        item.innerHTML = `
+          <div class="pl-thumb">🎵</div>
+          <div class="pl-meta">
+            <div class="pl-title">${pl.name}</div>
+            <div class="pl-subtitle">${pl.trackIds.length} canciones</div>
+          </div>
+          <div class="matp-check-box">${isAlreadyIn ? '✓' : ''}</div>
+        `;
+        item.onclick = () => {
+          if (isAlreadyIn) {
+            pl.trackIds = pl.trackIds.filter(id => id !== track.id);
+            savePlaylists();
+            showToast(`Eliminada de "${pl.name}"`);
+          } else {
+            pl.trackIds.push(track.id);
+            savePlaylists();
+            showToast(`✓ Agregada a "${pl.name}"`);
+          }
+          modal.style.display = 'none';
+          if (activePlaylistId === pl.id) {
+            openPlaylistDetail(pl.id);
+          }
+          renderLibraryView();
+        };
+        list.appendChild(item);
+      });
+
+      modal.style.display = 'flex';
+    }
+
+    // ==================== RENDERIZADO DE CANCIONES ====================
+    function createTrackRow(track, listRef, index, options = {}) {
+      cacheTrack(track);
+      const current = currentQueue[currentIndex];
+      const isPlaying = current && current.id === track.id;
+      const savedObj = savedTracks.find(t => t.id === track.id);
+      const isSaved = Boolean(savedObj);
+      const savedBoth = savedObj && savedObj.storageMode === 'both';
+
+      const div = document.createElement('div');
+      div.className = `track-card ${isPlaying ? 'playing' : ''}`;
+      div.innerHTML = `
+        <div class="track-thumb">
+          ${track.thumbnail ? `<img src="${track.thumbnail}" loading="lazy" alt="" />` : '♫'}
+        </div>
+        <div class="track-meta">
+          <div class="track-title">${track.title}</div>
+          <div class="track-artist">${track.artist}</div>
+        </div>
+        <div class="track-right-actions">
+          <button class="btn-dl ${isSaved ? 'saved' : ''}">
+            ${savedBoth ? '🔄 Ambos' : (isSaved ? '✓ Guardada' : (currentStorageMode === 'both' ? '🔄 Ambos' : (currentStorageMode === 'drive' ? '☁️ Drive' : '↓ Guardar')))}
+          </button>
+          <button class="btn-more-options" title="Opciones">⋮</button>
+          ${isSaved && !options.inPlaylistId ? `<button class="btn-del-mini" title="Borrar del cel">✕</button>` : ''}
+        </div>
+      `;
+
+      div.onclick = (e) => {
+        if (e.target.closest('button')) return;
+        currentQueue = listRef;
+        playTrackByIndex(index);
+      };
+
+      const dlBtn = div.querySelector('.btn-dl');
+      dlBtn.onclick = (e) => {
+        e.stopPropagation();
+        handleDownloadTrack(track, dlBtn);
+      };
+
+      const moreBtn = div.querySelector('.btn-more-options');
+      if (moreBtn) {
+        moreBtn.onclick = (e) => {
+          e.stopPropagation();
+          openAddToPlaylistModal(track, options);
+        };
+      }
+
+      const delMini = div.querySelector('.btn-del-mini');
+      if (delMini) {
+        delMini.onclick = async (e) => {
+          e.stopPropagation();
+          await deleteTrackOffline(track.id);
+          savedTracks = await getSavedTracks();
+          showToast(`🗑️ "${track.title}" eliminada de tu celular.`);
+          renderAllViews();
+        };
+      }
+
+      return div;
+    }
+
+    async function renderLibraryView() {
+      savedTracks = await getSavedTracks();
+      const libraryList = document.getElementById('libraryList');
+      if (!libraryList) return;
+      libraryList.innerHTML = '';
+
+      // Si el filtro es solo "Descargas"
+      if (libFilter === 'downloaded') {
+        if (!savedTracks.length) {
+          libraryList.innerHTML = `<div class="empty-state">No tienes canciones descargadas en tu celular aún.<br>Busca música y toca "↓ Guardar" para escuchar sin internet.</div>`;
+          return;
+        }
+        savedTracks.forEach((t, i) => {
+          libraryList.appendChild(createTrackRow(t, savedTracks, i));
+        });
+        return;
+      }
+
+      // Tile especial estilo Spotify: "Canciones que te gustan" (Descargas)
+      if (libFilter === 'all') {
+        const likedCard = document.createElement('div');
+        likedCard.className = 'playlist-item-card';
+        likedCard.innerHTML = `
+          <div class="pl-thumb liked-songs">💚</div>
+          <div class="pl-meta">
+            <div class="pl-title">Canciones que te gustan</div>
+            <div class="pl-subtitle">Playlist • ${savedTracks.length} canciones descargadas</div>
+          </div>
+        `;
+        likedCard.onclick = () => {
+          libFilter = 'downloaded';
+          document.querySelectorAll('.lib-chip').forEach(c => {
+            c.classList.toggle('active', c.getAttribute('data-filter') === 'downloaded');
+          });
+          renderLibraryView();
+        };
+        libraryList.appendChild(likedCard);
+      }
+
+      // Playlists creadas por el usuario
+      if (!playlists.length) {
+        if (libFilter === 'playlists') {
+          libraryList.innerHTML = `<div class="empty-state">Aún no tienes playlists creadas.<br>Toca el botón "+" arriba para crear tu primera playlist.</div>`;
+        }
+        return;
+      }
+
+      playlists.forEach(pl => {
+        const card = document.createElement('div');
+        card.className = 'playlist-item-card';
+        card.innerHTML = `
+          <div class="pl-thumb">🎵</div>
+          <div class="pl-meta">
+            <div class="pl-title">${pl.name}</div>
+            <div class="pl-subtitle">Playlist • ${pl.trackIds.length} canciones</div>
+          </div>
+          <button class="pl-more-btn" title="Opciones">⋮</button>
+        `;
+        card.onclick = (e) => {
+          if (e.target.closest('.pl-more-btn')) return;
+          openPlaylistDetail(pl.id);
+        };
+        card.querySelector('.pl-more-btn').onclick = (e) => {
+          e.stopPropagation();
+          openPlaylistOptionsMenu(pl.id);
+        };
+        libraryList.appendChild(card);
+      });
+    }
+
+    let searchResultsData = [];
+    function renderSearchResults() {
+      const container = document.getElementById('searchResultsList');
+      container.innerHTML = '';
+      if (!searchResultsData.length) {
+        container.innerHTML = `<div class="empty-state">No se encontraron resultados para tu búsqueda.</div>`;
+        return;
+      }
+      searchResultsData.forEach((t, i) => {
+        container.appendChild(createTrackRow(t, searchResultsData, i));
+      });
+    }
+
+    let homeTracksData = [];
+    function renderHomeView() {
+      const container = document.getElementById('homeList');
+      container.innerHTML = '';
+      if (!homeTracksData.length) {
+        container.innerHTML = `<div class="empty-state">Cargando música destacada...</div>`;
+        return;
+      }
+      homeTracksData.forEach((t, i) => {
+        container.appendChild(createTrackRow(t, homeTracksData, i));
+      });
+    }
+
+    function renderAllViews() {
+      renderLibraryView();
+      if (searchResultsData.length) renderSearchResults();
+      if (homeTracksData.length) renderHomeView();
+    }
+
+    // ==================== IMPORTACIÓN DE PLAYLISTS EN ORDEN ORIGINAL (SPOTIFY & YOUTUBE) ====================
+    let pendingImportedPlaylist = null;
+
+    function extractFirstUrlFromText(text) {
+      const m = String(text || '').match(/https?:\/\/[^\s"'<>]+/i);
+      return m ? m[0] : String(text || '').trim();
+    }
+
+    function parseSpotifyUrlMobile(rawText) {
+      const m = String(rawText || '').match(/open\.spotify\.com\/(?:intl-[a-z-]+\/)?(track|playlist|album)\/([A-Za-z0-9]+)/i);
+      if (m) return { type: m[1].toLowerCase(), id: m[2] };
+      const uriMatch = String(rawText || '').match(/spotify:(track|playlist|album):([A-Za-z0-9]+)/i);
+      if (uriMatch) return { type: uriMatch[1].toLowerCase(), id: uriMatch[2] };
+      return null;
+    }
+
+    function parseYoutubeUrlMobile(rawText) {
+      const url = extractFirstUrlFromText(rawText);
+      if (!/(?:youtube\.com|youtu\.be|music\.youtube\.com)/i.test(url)) return null;
+      const listMatch = url.match(/[?&]list=([A-Za-z0-9_-]+)/i);
+      const vidMatch = url.match(/(?:v=|youtu\.be\/|\/shorts\/|\/live\/)([A-Za-z0-9_-]{11})/i);
+      if (listMatch) return { type: 'playlist', listId: listMatch[1], url };
+      if (vidMatch) return { type: 'video', videoId: vidMatch[1], url };
+      return null;
+    }
+
+    async function fetchTextMobileCrossOrigin(targetUrl) {
+      if (window.SSpotifyNative && typeof window.SSpotifyNative.fetchUrl === 'function') {
+        try {
+          const nativeTxt = window.SSpotifyNative.fetchUrl(targetUrl);
+          if (nativeTxt && nativeTxt.length > 50) return nativeTxt;
+        } catch {}
+      }
+      try {
+        const jinaRes = await fetch(`https://r.jina.ai/${targetUrl}`);
+        if (jinaRes.ok) {
+          const txt = await jinaRes.text();
+          if (txt && txt.length > 50) return txt;
+        }
+      } catch {}
+      return '';
+    }
+
+    async function resolveSpotifyShortLinkMobile(shortUrl) {
+      if (window.SSpotifyNative && typeof window.SSpotifyNative.resolveRedirectUrl === 'function') {
+        try {
+          const resolved = window.SSpotifyNative.resolveRedirectUrl(shortUrl);
+          const parsed = parseSpotifyUrlMobile(resolved);
+          if (parsed) return { resolvedUrl: resolved, ...parsed };
+        } catch {}
+      }
+      const txt = await fetchTextMobileCrossOrigin(shortUrl);
+      const parsedFromTxt = parseSpotifyUrlMobile(txt);
+      if (parsedFromTxt) return parsedFromTxt;
+      return null;
+    }
+
+    function parseDurationTextToSecMobile(txt) {
+      const m = String(txt || '').match(/(\d{1,2}):(\d{2})/);
+      return m ? (parseInt(m[1], 10) * 60 + parseInt(m[2], 10)) : 0;
+    }
+
+    function parseSpotifyTracksFromJinaMarkdown(mdText, idPrefix) {
+      const titleMatch = mdText.match(/^Title:\s*([^\r\n]+)/m) || mdText.match(/^#\s+(?!Your Library)([^\r\n]+)/m);
+      const collectionTitle = titleMatch
+        ? titleMatch[1].replace(/\s*[-|]\s*Spotify.*$/i, '').trim()
+        : 'Playlist de Spotify';
+
+      const items = [];
+      const seenTrackIds = new Set();
+
+      // 1. Formato Embed Markdown: "1. ### Titulo \n #### Artista \n 03:20" (hasta 100 canciones)
+      const embedEntryRegex = /^\s*\d+\.\s+###\s+([^\r\n]+)\s*(?:\r?\n)+\s*####\s+([^\r\n]+)(?:(?:\r?\n)+\s*(\d{1,2}:\d{2}))?/gm;
+      let em;
+      while ((em = embedEntryRegex.exec(mdText)) !== null) {
+        const trackTitle = em[1].trim();
+        let artist = em[2].replace(/\u00a0/g, ' ').replace(/^E\s+(?=[A-Z0-9])/i, '').trim() || 'Artista';
+        // Normalizar comas sin espacio ("The Weeknd,Daft Punk" -> "The Weeknd, Daft Punk")
+        artist = artist.replace(/,(?=\S)/g, ', ');
+        const duration = parseDurationTextToSecMobile(em[3]);
+        if (!trackTitle) continue;
+        const dedupKey = `${trackTitle.toLowerCase()}__${artist.toLowerCase()}`;
+        if (seenTrackIds.has(dedupKey)) continue;
+        seenTrackIds.add(dedupKey);
+        items.push({
+          id: 'sp_' + idPrefix + '_' + items.length,
+          title: trackTitle,
+          artist,
+          thumbnail: '',
+          duration,
+          trackOrder: items.length + 1
+        });
+      }
+      if (items.length > 0) return { collectionTitle, items };
+
+      // 2. Formato página pública: [Titulo](https://open.spotify.com/track/ID) seguido de [Artista](https://open.spotify.com/artist/...)
+      const trackLinkRegex = /\[([^\]]+)\]\(https:\/\/open\.spotify\.com\/track\/([A-Za-z0-9]+)[^\)]*\)/g;
+      let match;
+      while ((match = trackLinkRegex.exec(mdText)) !== null) {
+        const trackTitle = match[1].trim();
+        const trackSpId = match[2];
+        if (!trackTitle || seenTrackIds.has(trackSpId)) continue;
+        seenTrackIds.add(trackSpId);
+
+        const beforeSlice = mdText.slice(Math.max(0, match.index - 220), match.index);
+        const afterSlice = mdText.slice(match.index + match[0].length, match.index + match[0].length + 450);
+
+        const imgMatches = [...beforeSlice.matchAll(/!\[[^\]]*\]\((https:\/\/i\.scdn\.co\/image\/[^\)]+)\)/g)];
+        const thumb = imgMatches.length ? imgMatches[imgMatches.length - 1][1] : '';
+
+        const beforeAlbum = afterSlice.split(/https:\/\/open\.spotify\.com\/album\//i)[0];
+        const artistMatches = [...beforeAlbum.matchAll(/\[([^\]]+)\]\(https:\/\/open\.spotify\.com\/artist\/[^\)]+\)/g)];
+        const artistNames = artistMatches.map(a => a[1].trim()).filter(Boolean);
+        const artist = artistNames.length ? artistNames.join(', ') : 'Artista';
+
+        items.push({
+          id: 'sp_' + idPrefix + '_' + items.length + '_' + trackSpId,
+          title: trackTitle,
+          artist,
+          thumbnail: thumb,
+          duration: 0,
+          trackOrder: items.length + 1
+        });
+      }
+      return { collectionTitle, items };
+    }
+
+    function mapSpotifyPathfinderItem(entry, playlistId, index, defaultCover) {
+      const track = entry?.itemV2?.data;
+      if (!track || track.__typename === 'RestrictedContent' || !track.name) return null;
+      const uriParts = String(track.uri || '').split(':');
+      const spId = uriParts[uriParts.length - 1] || String(index);
+      const artists = (track.artists?.items || [])
+        .map(a => a?.profile?.name || '')
+        .filter(Boolean)
+        .join(', ') || 'Artista';
+      const sources = track.albumOfTrack?.coverArt?.sources || [];
+      const thumb = (sources[2]?.url || sources[0]?.url || defaultCover || '');
+      const durationMs = track.trackDuration?.totalMilliseconds || 0;
+      return {
+        id: 'sp_' + playlistId + '_' + index + '_' + spId,
+        title: track.name,
+        artist: artists,
+        album: track.albumOfTrack?.name || '',
+        thumbnail: thumb,
+        duration: durationMs ? Math.round(durationMs / 1000) : 0,
+        trackOrder: index + 1
+      };
+    }
+
+    async function fetchAllSpotifyPlaylistPathfinderMobile(playlistId, accessToken, defaultCover, onProgress) {
+      if (!accessToken || !window.SSpotifyNative || typeof window.SSpotifyNative.fetchUrlWithBearer !== 'function') {
+        return null;
+      }
+      const ext = JSON.stringify({
+        persistedQuery: {
+          version: 1,
+          sha256Hash: '7982b11e21535cd2594badc40030b745671b61a1fa66766e569d45e6364f3422'
+        }
+      });
+      const collected = [];
+      const limit = 100;
+      let offset = 0;
+      let totalCount = Infinity;
+
+      for (let page = 0; page < 25; page++) {
+        const vars = JSON.stringify({ uri: `spotify:playlist:${playlistId}`, offset, limit });
+        const apiUrl = `https://api-partner.spotify.com/pathfinder/v1/query?operationName=fetchPlaylistContents&variables=${encodeURIComponent(vars)}&extensions=${encodeURIComponent(ext)}`;
+        let rawJson = '';
+        try {
+          rawJson = window.SSpotifyNative.fetchUrlWithBearer(apiUrl, accessToken) || '';
+        } catch {
+          rawJson = '';
+        }
+        if (!rawJson) break;
+
+        let parsed;
+        try {
+          parsed = JSON.parse(rawJson);
+        } catch {
+          break;
+        }
+        const content = parsed?.data?.playlistV2?.content;
+        const pageItems = content?.items;
+        if (!Array.isArray(pageItems) || pageItems.length === 0) break;
+
+        if (typeof content.totalCount === 'number' && content.totalCount > 0) {
+          totalCount = content.totalCount;
+        }
+
+        for (let i = 0; i < pageItems.length; i++) {
+          const mapped = mapSpotifyPathfinderItem(pageItems[i], playlistId, offset + i, defaultCover);
+          if (mapped) {
+            mapped.trackOrder = collected.length + 1;
+            collected.push(mapped);
+          }
+        }
+
+        if (typeof onProgress === 'function') {
+          onProgress(collected.length, Number.isFinite(totalCount) ? totalCount : collected.length);
+        }
+
+        offset += pageItems.length;
+        if (offset >= totalCount || pageItems.length < limit) break;
+        await new Promise(r => setTimeout(r, 20));
+      }
+
+      return collected.length ? collected : null;
+    }
+
+    async function importSpotifyLinkMobile(query) {
+      const cleanUrl = extractFirstUrlFromText(query);
+      let info = parseSpotifyUrlMobile(query);
+
+      const resHeader = document.getElementById('searchResultsHeader');
+      const banner = document.getElementById('searchPlaylistImportBanner');
+      const bannerTitle = document.getElementById('ipbTitle');
+      const bannerSub = document.getElementById('ipbSubtitle');
+      if (banner) banner.style.display = 'none';
+      resHeader.textContent = 'Analizando enlace de Spotify en orden original...';
+
+      try {
+        if (!info && /(?:spotify\.link|spoti\.fi)/i.test(cleanUrl)) {
+          info = await resolveSpotifyShortLinkMobile(cleanUrl);
+        }
+        if (!info) {
+          resHeader.textContent = 'No se pudo reconocer ese enlace de Spotify';
+          return true;
+        }
+
+        let collectionTitle = 'Playlist de Spotify';
+        let rawItems = [];
+        let embedToken = '';
+        let defaultCover = '';
+        let usedFullPagination = false;
+
+        // 1. Intentar vía puente nativo Android (embed HTML completo + token de sesión para paginación total)
+        const embedUrl = `https://open.spotify.com/embed/${info.type}/${info.id}`;
+        if (window.SSpotifyNative && typeof window.SSpotifyNative.fetchUrl === 'function') {
+          try {
+            const html = window.SSpotifyNative.fetchUrl(embedUrl) || '';
+            const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
+            if (nextDataMatch) {
+              const json = JSON.parse(nextDataMatch[1]);
+              const state = json?.props?.pageProps?.state || {};
+              embedToken = state?.settings?.session?.accessToken || '';
+              const entity = state?.data?.entity;
+              if (entity) {
+                collectionTitle = entity.title || entity.name || collectionTitle;
+                const coverImages = entity.visualIdentity?.image || entity.coverArt?.sources || [];
+                defaultCover = coverImages.length > 0 ? (coverImages[coverImages.length - 1].url || coverImages[0].url) : '';
+                if (info.type === 'track') {
+                  const title = entity.title || entity.name || 'Canción';
+                  const artist = entity.subtitle || (Array.isArray(entity.artists) ? entity.artists.map(a => a.name).join(', ') : 'Spotify');
+                  rawItems.push({
+                    id: 'sp_' + info.id,
+                    title,
+                    artist,
+                    thumbnail: defaultCover,
+                    duration: entity.duration ? Math.round(entity.duration / 1000) : 0,
+                    trackOrder: 1
+                  });
+                } else {
+                  const list = entity.trackList || [];
+                  rawItems = list.map((t, idx) => ({
+                    id: 'sp_' + info.id + '_' + idx + '_' + (t.uri ? t.uri.split(':').pop() : idx),
+                    title: t.title || 'Canción',
+                    artist: (t.subtitle || '').replace(/\u00a0/g, ' ').trim() || 'Artista',
+                    thumbnail: defaultCover,
+                    duration: t.duration ? Math.round(t.duration / 1000) : 0,
+                    trackOrder: idx + 1
+                  }));
+                }
+              }
+            }
+          } catch {}
+        }
+
+        // 1b. Si es playlist y tenemos fetchUrlWithBearer (APK v1.5.12+), paginar TODAS las canciones (+100, +500, +1000...)
+        if (info.type === 'playlist' && embedToken && window.SSpotifyNative && typeof window.SSpotifyNative.fetchUrlWithBearer === 'function') {
+          resHeader.textContent = `Cargando "${collectionTitle}" completa...`;
+          await new Promise(r => setTimeout(r, 15));
+          const allTracks = await fetchAllSpotifyPlaylistPathfinderMobile(info.id, embedToken, defaultCover, (loaded, total) => {
+            resHeader.textContent = `Cargando "${collectionTitle}": ${loaded}/${total} canciones...`;
+          });
+          if (allTracks && allTracks.length >= rawItems.length) {
+            rawItems = allTracks;
+            usedFullPagination = true;
+          }
+        }
+
+        // 2. Fallback compatible con OTA / CORS sin puente nativo: intentar /embed/ en r.jina.ai (hasta 100 canciones) y luego página pública
+        if (!rawItems.length) {
+          const fallbackUrls = [
+            `https://r.jina.ai/https://open.spotify.com/embed/${info.type}/${info.id}`,
+            `https://r.jina.ai/https://open.spotify.com/${info.type}/${info.id}`
+          ];
+          for (const target of fallbackUrls) {
+            try {
+              const jinaRes = await fetch(target);
+              if (!jinaRes.ok) continue;
+              const md = await jinaRes.text();
+              const parsed = parseSpotifyTracksFromJinaMarkdown(md, info.id);
+              if (parsed.items.length > rawItems.length) {
+                rawItems = info.type === 'track' ? [parsed.items[0]] : parsed.items;
+                collectionTitle = info.type === 'track' ? parsed.items[0].title : parsed.collectionTitle;
+              }
+              if (rawItems.length >= 100 || info.type === 'track') break;
+            } catch {}
+          }
+        }
+
+        // 3. Fallback oEmbed para canción suelta
+        if (!rawItems.length && info.type === 'track') {
+          try {
+            const oe = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(`https://open.spotify.com/track/${info.id}`)}`);
+            if (oe.ok) {
+              const oeJson = await oe.json();
+              collectionTitle = oeJson.title || 'Canción de Spotify';
+              rawItems = [{
+                id: 'sp_' + info.id,
+                title: collectionTitle,
+                artist: 'Spotify',
+                thumbnail: oeJson.thumbnail_url || '',
+                duration: 0,
+                trackOrder: 1
+              }];
+            }
+          } catch {}
+        }
+
+        if (!rawItems.length) {
+          resHeader.textContent = 'No se pudieron leer canciones del enlace de Spotify';
+          document.getElementById('searchResultsList').innerHTML = `<div class="empty-state">Verifica que la playlist de Spotify sea pública e inténtalo de nuevo.</div>`;
+          return true;
+        }
+
+        searchResultsData = rawItems;
+        pendingImportedPlaylist = {
+          name: collectionTitle,
+          items: rawItems
+        };
+
+        const needsApkForMore = info.type === 'playlist' && !usedFullPagination && rawItems.length >= 99 && !(window.SSpotifyNative && typeof window.SSpotifyNative.fetchUrlWithBearer === 'function');
+        if (banner && info.type !== 'track') {
+          bannerTitle.textContent = collectionTitle;
+          bannerSub.textContent = needsApkForMore
+            ? `${rawItems.length} canciones • Actualiza el APK v1.5.12 si tu playlist tiene más de 100`
+            : `${rawItems.length} canciones • Se guardarán en el orden exacto del link`;
+          banner.style.display = 'flex';
+        }
+
+        resHeader.textContent = `${collectionTitle} (${rawItems.length} canciones en orden)`;
+        renderSearchResults();
+      } catch (err) {
+        resHeader.textContent = 'Error al leer el enlace de Spotify';
+      }
+      return true;
+    }
+
+    async function importYoutubeLinkMobile(query) {
+      const ytInfo = parseYoutubeUrlMobile(query);
+      if (!ytInfo) return false;
+
+      const resHeader = document.getElementById('searchResultsHeader');
+      const banner = document.getElementById('searchPlaylistImportBanner');
+      const bannerTitle = document.getElementById('ipbTitle');
+      const bannerSub = document.getElementById('ipbSubtitle');
+      if (banner) banner.style.display = 'none';
+      resHeader.textContent = 'Analizando enlace de YouTube en orden original...';
+
+      try {
+        let collectionTitle = 'Playlist de YouTube';
+        let rawItems = [];
+
+        if (ytInfo.type === 'playlist') {
+          const invidiousHosts = [
+            'https://inv.nadeko.net',
+            'https://invidious.nerdvpn.de',
+            'https://yewtu.be'
+          ];
+          for (const host of invidiousHosts) {
+            try {
+              const seenIds = new Set();
+              let expectedTotal = Infinity;
+              for (let page = 1; page <= 15; page++) {
+                const pageUrl = `${host}/api/v1/playlists/${encodeURIComponent(ytInfo.listId)}` + (page > 1 ? `?page=${page}` : '');
+                const r = await fetch(pageUrl);
+                if (!r.ok) break;
+                const data = await r.json();
+                if (!data || !Array.isArray(data.videos) || data.videos.length === 0) break;
+                if (page === 1) {
+                  collectionTitle = data.title || collectionTitle;
+                  if (typeof data.videoCount === 'number' && data.videoCount > 0) expectedTotal = data.videoCount;
+                }
+                let addedOnPage = 0;
+                for (const v of data.videos) {
+                  const vid = v.videoId || '';
+                  if (vid && seenIds.has(vid)) continue;
+                  if (vid) seenIds.add(vid);
+                  rawItems.push({
+                    id: 'yt_' + (vid || rawItems.length),
+                    title: v.title || 'Canción',
+                    artist: v.author || 'YouTube',
+                    thumbnail: vid ? `https://i.ytimg.com/vi/${vid}/hqdefault.jpg` : '',
+                    duration: v.lengthSeconds || 0,
+                    trackOrder: rawItems.length + 1
+                  });
+                  addedOnPage++;
+                }
+                resHeader.textContent = `Cargando "${collectionTitle}": ${rawItems.length} canciones...`;
+                if (rawItems.length >= expectedTotal || addedOnPage === 0) break;
+              }
+              if (rawItems.length > 0) break;
+            } catch {}
+          }
+        } else if (ytInfo.type === 'video') {
+          try {
+            const oe = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${ytInfo.videoId}`)}&format=json`);
+            if (oe.ok) {
+              const j = await oe.json();
+              collectionTitle = j.title || 'Video de YouTube';
+              rawItems = [{
+                id: 'yt_' + ytInfo.videoId,
+                title: j.title || 'Canción de YouTube',
+                artist: j.author_name || 'YouTube',
+                thumbnail: j.thumbnail_url || `https://i.ytimg.com/vi/${ytInfo.videoId}/hqdefault.jpg`,
+                duration: 0,
+                trackOrder: 1
+              }];
+            }
+          } catch {}
+        }
+
+        if (!rawItems.length) {
+          resHeader.textContent = 'No se pudo leer la playlist de YouTube';
+          document.getElementById('searchResultsList').innerHTML = `<div class="empty-state">Asegúrate de que el enlace de YouTube sea público e inténtalo nuevamente.</div>`;
+          return true;
+        }
+
+        searchResultsData = rawItems;
+        pendingImportedPlaylist = {
+          name: collectionTitle,
+          items: rawItems
+        };
+
+        if (banner && ytInfo.type === 'playlist') {
+          bannerTitle.textContent = collectionTitle;
+          bannerSub.textContent = `${rawItems.length} canciones • Se guardarán en el orden exacto del link`;
+          banner.style.display = 'flex';
+        }
+
+        resHeader.textContent = `${collectionTitle} (${rawItems.length} canciones en orden)`;
+        renderSearchResults();
+      } catch {
+        resHeader.textContent = 'Error al leer el enlace de YouTube';
+      }
+      return true;
+    }
+
+    // ==================== BÚSQUEDA AUTÓNOMA (ONLINE SEARCH) ====================
+    async function searchOnline(query) {
+      const trimmed = (query || '').trim();
+      const banner = document.getElementById('searchPlaylistImportBanner');
+      if (!trimmed) {
+        if (banner) banner.style.display = 'none';
+        return;
+      }
+
+      if (/(?:open\.spotify\.com|spotify\.link|spoti\.fi|spotify:(?:track|playlist|album):)/i.test(trimmed)) {
+        await importSpotifyLinkMobile(trimmed);
+        return;
+      }
+
+      if (/(?:youtube\.com|youtu\.be|music\.youtube\.com)/i.test(trimmed)) {
+        await importYoutubeLinkMobile(trimmed);
+        return;
+      }
+
+      if (banner) banner.style.display = 'none';
+      pendingImportedPlaylist = null;
+      const resHeader = document.getElementById('searchResultsHeader');
+      resHeader.textContent = `Buscando "${trimmed}"...`;
+      try {
+        const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(trimmed)}&media=music&entity=song&limit=30`);
+        const json = await res.json();
+        searchResultsData = (json.results || []).map(r => ({
+          id: String(r.trackId),
+          title: r.trackName,
+          artist: r.artistName,
+          thumbnail: r.artworkUrl100 ? r.artworkUrl100.replace('100x100', '300x300') : '',
+          duration: Math.round(r.trackTimeMillis / 1000),
+          previewUrl: r.previewUrl,
+          streamUrl: ''
+        }));
+        resHeader.textContent = `Resultados para "${trimmed}" (${searchResultsData.length})`;
+        renderSearchResults();
+      } catch (err) {
+        resHeader.textContent = 'Sin conexión a internet';
+        document.getElementById('searchResultsList').innerHTML = `<div class="empty-state">No se pudo buscar en línea.<br>Puedes seguir escuchando tus canciones descargadas en <strong>Tu Biblioteca</strong>.</div>`;
+      }
+    }
+
+    // Cargar canciones recomendadas al arrancar
+    async function loadFeaturedHome() {
+      try {
+        const res = await fetch('https://itunes.apple.com/search?term=latin+pop+hits&media=music&entity=song&limit=15');
+        const json = await res.json();
+        homeTracksData = (json.results || []).map(r => ({
+          id: String(r.trackId),
+          title: r.trackName,
+          artist: r.artistName,
+          thumbnail: r.artworkUrl100 ? r.artworkUrl100.replace('100x100', '300x300') : '',
+          duration: Math.round(r.trackTimeMillis / 1000),
+          previewUrl: r.previewUrl,
+          streamUrl: ''
+        }));
+        renderHomeView();
+      } catch {}
+    }
+
+    // ==================== TABS DE NAVEGACIÓN ====================
+    document.querySelectorAll('.nav-item').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.nav-tabs-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        const tabId = btn.getAttribute('data-tab');
+        document.getElementById(tabId)?.classList.add('active');
+        if (tabId === 'tabLibrary') renderLibraryView();
+      };
+    });
+
+    let searchTimer = null;
+    const mobileSearchInput = document.getElementById('searchInput');
+    if (mobileSearchInput) {
+      mobileSearchInput.oninput = (e) => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+          searchOnline(e.target.value);
+        }, 350);
+      };
+      mobileSearchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          clearTimeout(searchTimer);
+          searchOnline(mobileSearchInput.value);
+        }
+      });
+      mobileSearchInput.addEventListener('paste', () => {
+        clearTimeout(searchTimer);
+        setTimeout(() => searchOnline(mobileSearchInput.value), 80);
+      });
+    }
+    document.getElementById('btnMobileSearchGo')?.addEventListener('click', () => {
+      clearTimeout(searchTimer);
+      searchOnline(document.getElementById('searchInput')?.value || '');
+    });
+
+    // Inicializar
+    
+    // ==================== GESTOR DE ALMACENAMIENTO & GOOGLE DRIVE ====================
+    let currentStorageMode = localStorage.getItem('sspotify_mobile_storage_mode') || 'local';
+    let driveAccountEmail = localStorage.getItem('sspotify_mobile_drive_email') || '';
+    let pendingModalMode = currentStorageMode;
+
+    function updateStorageHeaderBadge() {
+      const badge = document.getElementById('storageBadge');
+      const icon = document.getElementById('storageBadgeIcon');
+      const text = document.getElementById('storageBadgeText');
+      if (!badge || !icon || !text) return;
+
+      badge.classList.remove('mode-drive', 'mode-both');
+      if (currentStorageMode === 'both') {
+        badge.classList.add('mode-both');
+        icon.textContent = '🔄';
+        text.textContent = 'Cel + Drive';
+      } else if (currentStorageMode === 'drive') {
+        badge.classList.add('mode-drive');
+        icon.textContent = '☁️';
+        text.textContent = driveAccountEmail ? driveAccountEmail.split('@')[0] : 'Google Drive';
+      } else {
+        icon.textContent = '💾';
+        text.textContent = 'En celular';
+      }
+
+      // Actualizar título en pestaña Biblioteca
+      const libTitle = document.querySelector('#tabLibrary .section-title span:first-child');
+      if (libTitle) {
+        if (currentStorageMode === 'both') {
+          libTitle.textContent = 'Celular Offline + Google Drive';
+        } else if (currentStorageMode === 'drive') {
+          libTitle.textContent = 'Música en Google Drive (Nube)';
+        } else {
+          libTitle.textContent = 'Descargas en tu celular';
+        }
+      }
+    }
+
+    function syncStorageModalUI() {
+      const cardLocal = document.getElementById('optCardLocal');
+      const cardDrive = document.getElementById('optCardDrive');
+      const cardBoth = document.getElementById('optCardBoth');
+      const notConnBox = document.getElementById('mDriveNotConnected');
+      const connBox = document.getElementById('mDriveConnected');
+      const emailText = document.getElementById('mDriveEmail');
+      const avatar = document.getElementById('mDriveAvatar');
+      const countEl = document.getElementById('mobileLocalCount');
+      const emailInput = document.getElementById('mobileDriveEmailInput');
+
+      if (countEl) countEl.textContent = savedTracks ? String(savedTracks.length) : '0';
+
+      cardLocal?.classList.toggle('active', pendingModalMode === 'local');
+      cardDrive?.classList.toggle('active', pendingModalMode === 'drive');
+      cardDrive?.classList.toggle('card-drive', pendingModalMode === 'drive');
+      cardBoth?.classList.toggle('active', pendingModalMode === 'both');
+      cardBoth?.classList.toggle('card-both', pendingModalMode === 'both');
+
+      if (driveAccountEmail) {
+        if (notConnBox) notConnBox.style.display = 'none';
+        if (connBox) connBox.style.display = 'block';
+        if (emailText) emailText.textContent = driveAccountEmail;
+        if (avatar) avatar.textContent = driveAccountEmail.charAt(0).toUpperCase();
+      } else {
+        if (notConnBox) notConnBox.style.display = 'block';
+        if (connBox) connBox.style.display = 'none';
+        if (emailInput && !emailInput.value) emailInput.value = '';
+      }
+    }
+
+    function openStorageModal() {
+      pendingModalMode = currentStorageMode;
+      syncStorageModalUI();
+      const modal = document.getElementById('modalStorageSettings');
+      if (modal) modal.style.display = 'flex';
+    }
+
+    function closeStorageModal() {
+      const modal = document.getElementById('modalStorageSettings');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function initStorageManager() {
+      // Sincronizar cuenta, carpeta y modo de almacenamiento persistidos nativamente en Android
+      if (window.SSpotifyNative && window.SSpotifyNative.getGoogleDriveAccount) {
+        try {
+          const nativeAcc = window.SSpotifyNative.getGoogleDriveAccount();
+          if (nativeAcc) {
+            driveAccountEmail = nativeAcc;
+            localStorage.setItem('sspotify_mobile_drive_email', driveAccountEmail);
+          }
+          if (window.SSpotifyNative.getDriveFolderId) {
+            const nativeFolder = window.SSpotifyNative.getDriveFolderId();
+            if (nativeFolder && !localStorage.getItem('sspotify_mobile_drive_folder_id')) {
+              localStorage.setItem('sspotify_mobile_drive_folder_id', nativeFolder);
+            }
+          }
+          if (window.SSpotifyNative.getStorageMode) {
+            const nativeMode = window.SSpotifyNative.getStorageMode();
+            if (nativeMode && (nativeMode === 'local' || driveAccountEmail)) {
+              currentStorageMode = nativeMode;
+              pendingModalMode = nativeMode;
+              localStorage.setItem('sspotify_mobile_storage_mode', nativeMode);
+            } else if (driveAccountEmail && (currentStorageMode === 'drive' || currentStorageMode === 'both')) {
+              window.SSpotifyNative.setStorageMode?.(currentStorageMode);
+            }
+          }
+        } catch {}
+      }
+
+      updateStorageHeaderBadge();
+
+      // Callback invocado automáticamente cuando Google aprueba el inicio de sesión
+      window.onGoogleDriveAuthSuccess = function(email) {
+        driveAccountEmail = email;
+        localStorage.setItem('sspotify_mobile_drive_email', driveAccountEmail);
+        const preservedMode = currentStorageMode === 'both' ? 'both' : 'drive';
+        currentStorageMode = preservedMode;
+        pendingModalMode = preservedMode;
+        localStorage.setItem('sspotify_mobile_storage_mode', preservedMode);
+        try { window.SSpotifyNative?.setStorageMode?.(preservedMode); } catch {}
+        updateStorageHeaderBadge();
+        syncStorageModalUI();
+        showToast(`✅ Cuenta "${email}" verificada oficialmente por Google`);
+        renderAllViews();
+      };
+
+      // Abrir modal al pulsar el botón del header
+      document.getElementById('storageBadge')?.addEventListener('click', () => {
+        openStorageModal();
+      });
+
+      // Cerrar modal
+      document.getElementById('btnCloseStorageModal')?.addEventListener('click', closeStorageModal);
+      document.getElementById('modalStorageSettings')?.addEventListener('click', (e) => {
+        if (e.target.id === 'modalStorageSettings') closeStorageModal();
+      });
+
+      // Alternar entre celular, drive y ambos en el modal
+      document.getElementById('optCardLocal')?.addEventListener('click', () => {
+        pendingModalMode = 'local';
+        syncStorageModalUI();
+      });
+
+      document.getElementById('optCardDrive')?.addEventListener('click', () => {
+        pendingModalMode = 'drive';
+        syncStorageModalUI();
+      });
+
+      document.getElementById('optCardBoth')?.addEventListener('click', () => {
+        pendingModalMode = 'both';
+        syncStorageModalUI();
+      });
+
+      // Iniciar sesión oficial de Google con verificación por contraseña
+      document.getElementById('btnConnectMobileDrive')?.addEventListener('click', () => {
+        const btnText = document.getElementById('btnConnectDriveText');
+        if (btnText) btnText.textContent = 'Abriendo inicio de sesión oficial de Google...';
+        showToast('Inicia sesión en la página oficial de Google con tu correo y contraseña...');
+
+        if (window.SSpotifyNative && window.SSpotifyNative.loginGoogleDrive) {
+          window.SSpotifyNative.loginGoogleDrive();
+        } else {
+          // Fallback para navegador web estándar
+          const OAUTH_CLIENT_ID = '202264815644.apps.googleusercontent.com';
+          const REDIRECT_URI = 'http://127.0.0.1:53218/';
+          const oauthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${OAUTH_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${encodeURIComponent('openid email profile https://www.googleapis.com/auth/drive.file')}&access_type=offline&prompt=consent%20select_account`;
+          window.location.href = oauthUrl;
+        }
+      });
+
+      // Desvincular / Cerrar sesión de Google Drive
+      document.getElementById('btnDisconnectMobileDrive')?.addEventListener('click', () => {
+        if (window.SSpotifyNative && window.SSpotifyNative.disconnectGoogleDrive) {
+          try { window.SSpotifyNative.disconnectGoogleDrive(); } catch {}
+        }
+        driveAccountEmail = '';
+        localStorage.removeItem('sspotify_mobile_drive_email');
+        currentStorageMode = 'local';
+        pendingModalMode = 'local';
+        localStorage.setItem('sspotify_mobile_storage_mode', 'local');
+        updateStorageHeaderBadge();
+        syncStorageModalUI();
+        showToast('Sesión de Google Drive cerrada. Modo Celular activado.');
+        renderAllViews();
+      });
+
+      // Aplicar modo de almacenamiento seleccionado
+      document.getElementById('btnApplyStorageMode')?.addEventListener('click', () => {
+        if ((pendingModalMode === 'drive' || pendingModalMode === 'both') && !driveAccountEmail) {
+          showToast('⚠️ Debes verificar tu cuenta con Google antes de activar Google Drive');
+          return;
+        }
+
+        currentStorageMode = pendingModalMode;
+        localStorage.setItem('sspotify_mobile_storage_mode', currentStorageMode);
+        try { window.SSpotifyNative?.setStorageMode?.(currentStorageMode); } catch {}
+        updateStorageHeaderBadge();
+        closeStorageModal();
+
+        if (currentStorageMode === 'both') {
+          showToast(`🔄 Modo Ambos activado (Celular + Drive de ${driveAccountEmail.split('@')[0]})`);
+        } else if (currentStorageMode === 'drive') {
+          showToast(`☁️ Modo Google Drive activado (${driveAccountEmail.split('@')[0]})`);
+        } else {
+          showToast('💾 Modo En Celular activado (Memoria interna)');
+        }
+        renderAllViews();
+      });
+    }
+
+    // ==================== OVER-THE-AIR (OTA) AUTO-UPDATER ====================
+    const CURRENT_CLIENT_VERSION = '1.5.16';
+
+    function initPlaylistsUI() {
+      loadPlaylists();
+
+      // Saludo dinámico según la hora del día
+      const hour = new Date().getHours();
+      const greetingEl = document.getElementById('spGreetingText');
+      if (greetingEl) {
+        if (hour >= 6 && hour < 12) greetingEl.textContent = 'Buenos días';
+        else if (hour >= 12 && hour < 20) greetingEl.textContent = 'Buenas tardes';
+        else greetingEl.textContent = 'Buenas noches';
+      }
+
+      // Chips de filtro de biblioteca
+      document.querySelectorAll('.lib-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          document.querySelectorAll('.lib-chip').forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+          libFilter = chip.getAttribute('data-filter') || 'all';
+          renderLibraryView();
+        });
+      });
+
+      // Abrir modal de crear playlist
+      document.getElementById('btnOpenCreatePlaylist')?.addEventListener('click', openCreatePlaylistModal);
+      document.getElementById('btnCancelCreatePlaylist')?.addEventListener('click', () => {
+        const modal = document.getElementById('modalCreatePlaylist');
+        if (modal) modal.style.display = 'none';
+      });
+      document.getElementById('btnConfirmCreatePlaylist')?.addEventListener('click', handleCreatePlaylistConfirm);
+
+      // Cerrar modal al tocar fondo
+      document.getElementById('modalCreatePlaylist')?.addEventListener('click', (e) => {
+        if (e.target.id === 'modalCreatePlaylist') {
+          e.target.style.display = 'none';
+        }
+      });
+      document.getElementById('modalAddToPlaylist')?.addEventListener('click', (e) => {
+        if (e.target.id === 'modalAddToPlaylist') {
+          e.target.style.display = 'none';
+        }
+      });
+
+      // Atajo para crear nueva playlist desde el modal de agregar
+      document.getElementById('btnNewPlaylistFromAdd')?.addEventListener('click', () => {
+        const addModal = document.getElementById('modalAddToPlaylist');
+        if (addModal) addModal.style.display = 'none';
+        openCreatePlaylistModal();
+      });
+
+      // Botón volver de la vista de playlist
+      document.getElementById('btnBackFromPlaylist')?.addEventListener('click', () => {
+        document.getElementById('viewPlaylistDetail')?.classList.remove('open');
+        activePlaylistId = null;
+        renderLibraryView();
+      });
+
+      // Opciones de playlist (eliminar / renombrar)
+      document.getElementById('btnPlaylistOptions')?.addEventListener('click', () => {
+        if (activePlaylistId) openPlaylistOptionsMenu(activePlaylistId);
+      });
+
+      // Agregar canciones a la playlist (lleva a Buscar)
+      document.getElementById('btnAddSongsToPl')?.addEventListener('click', () => {
+        document.getElementById('viewPlaylistDetail')?.classList.remove('open');
+        document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.nav-tabs-content').forEach(c => c.classList.remove('active'));
+        const searchNav = document.querySelector('.nav-item[data-tab="tabSearch"]');
+        searchNav?.classList.add('active');
+        document.getElementById('tabSearch')?.classList.add('active');
+        document.getElementById('searchInput')?.focus();
+        showToast('Busca cualquier canción y toca "⋮" para agregarla');
+      });
+
+      // Reproducir toda la playlist con el botón flotante verde
+      document.getElementById('btnPlayAllPlaylist')?.addEventListener('click', () => {
+        const pl = playlists.find(p => p.id === activePlaylistId);
+        if (!pl || !pl.trackIds.length) {
+          showToast('La playlist aún no tiene canciones');
+          return;
+        }
+        const plTracks = pl.trackIds.map(id => trackCatalog[id] || savedTracks.find(t => t.id === id)).filter(Boolean);
+        if (plTracks.length) {
+          currentQueue = plTracks;
+          playTrackByIndex(0);
+          showToast(`▶ Reproduciendo playlist "${pl.name}"`);
+        }
+      });
+
+      // Botón en el reproductor de pantalla completa para agregar la canción actual a una playlist
+      document.getElementById('mpAddCurrentToPlaylist')?.addEventListener('click', () => {
+        const current = currentQueue[currentIndex];
+        if (current) {
+          openAddToPlaylistModal(current);
+        }
+      });
+
+      // Importar playlist completa respetando ESTRICTAMENTE el orden original del link
+      document.getElementById('btnImportPlaylistMobile')?.addEventListener('click', async () => {
+        if (!pendingImportedPlaylist || !pendingImportedPlaylist.items.length) return;
+        const { name, items } = pendingImportedPlaylist;
+
+        // Crear o actualizar playlist en el mismo orden exacto 1..N
+        let pl = playlists.find(p => p.name.toLowerCase() === name.toLowerCase());
+        if (!pl) {
+          pl = {
+            id: 'pl_' + Date.now(),
+            name,
+            description: 'Playlist importada en orden original',
+            trackIds: [],
+            createdAt: Date.now()
+          };
+          playlists.unshift(pl);
+        }
+
+        items.forEach(t => cacheTrack(t));
+        pl.trackIds = items.map(t => t.id);
+        savePlaylists();
+        renderLibraryView();
+
+        showToast(`⬇️ Descargando "${name}" en orden original (1 a ${items.length})...`);
+        for (let i = 0; i < items.length; i++) {
+          try {
+            await handleDownloadTrack(items[i], null, currentStorageMode);
+          } catch {}
+        }
+        showToast(`✅ Playlist "${name}" descargada (${items.length} canciones en orden)`);
+        renderAllViews();
+        openPlaylistDetail(pl.id);
+      });
+
+      // Sincronizar toda la playlist en AMBOS: Celular (Offline) + Google Drive (Nube)
+      document.getElementById('btnSyncPlBoth')?.addEventListener('click', async () => {
+        const pl = playlists.find(p => p.id === activePlaylistId);
+        if (!pl || !pl.trackIds.length) {
+          showToast('La playlist no tiene canciones para sincronizar');
+          return;
+        }
+        if (!driveAccountEmail) {
+          showToast('⚠️ Primero verifica tu cuenta de Google Drive');
+          openStorageModal();
+          return;
+        }
+        const plTracks = pl.trackIds.map(id => trackCatalog[id] || savedTracks.find(t => t.id === id)).filter(Boolean);
+        showToast(`🔄 Sincronizando "${pl.name}" en Celular + Google Drive (${plTracks.length} canciones)...`);
+        let synced = 0;
+        for (let i = 0; i < plTracks.length; i++) {
+          try {
+            await handleDownloadTrack(plTracks[i], null, 'both');
+            synced++;
+          } catch {}
+        }
+        showToast(`✅ "${pl.name}" disponible en Celular y respaldada en Google Drive (${synced}/${plTracks.length})`);
+        openPlaylistDetail(pl.id);
+        renderAllViews();
+      });
+    }
+
+    function initOtaEngine() {
+      const headerVersion = document.getElementById('otaHeaderVersion');
+      if (window.SSpotifyNative && window.SSpotifyNative.getAppVersion) {
+        try {
+          const v = window.SSpotifyNative.getAppVersion();
+          if (headerVersion && v) headerVersion.textContent = 'v' + v;
+        } catch {}
+      }
+
+      // Notificación enviada desde Android cuando se descarga una actualización OTA
+      window.onOtaUpdateReady = function(newVersion) {
+        const banner = document.getElementById('otaUpdateBanner');
+        const num = document.getElementById('otaVersionNum');
+        const btn = document.getElementById('btnCheckMobileUpdates');
+        if (num) num.textContent = newVersion;
+        if (banner) banner.style.display = 'flex';
+        if (btn) btn.classList.add('has-update');
+        showToast('✨ Nueva versión v' + newVersion + ' descargada');
+      };
+
+      document.getElementById('btnReloadOtaApp')?.addEventListener('click', () => {
+        if (window.SSpotifyNative && window.SSpotifyNative.reloadApp) {
+          window.SSpotifyNative.reloadApp();
+        } else {
+          window.location.reload();
+        }
+      });
+
+      document.getElementById('btnCheckMobileUpdates')?.addEventListener('click', () => {
+        showToast('Buscando actualizaciones...');
+        if (window.SSpotifyNative && window.SSpotifyNative.checkForUpdates) {
+          window.SSpotifyNative.checkForUpdates();
+        } else {
+          checkWebOtaUpdate(true);
+        }
+      });
+
+      // Si corre en web/PWA sin el bridge nativo de Android
+      if (!window.SSpotifyNative) {
+        setTimeout(() => checkWebOtaUpdate(false), 3000);
+      }
+    }
+
+    async function checkWebOtaUpdate(manual) {
+      try {
+        const res = await fetch('https://iansitooas.github.io/SSpotify-App/ota/version.json?t=' + Date.now());
+        if (!res.ok) throw new Error();
+        const pkg = await res.json();
+        const remoteVersion = pkg.version || CURRENT_CLIENT_VERSION;
+        if (remoteVersion !== CURRENT_CLIENT_VERSION) {
+          window.onOtaUpdateReady(remoteVersion);
+        } else if (manual) {
+          showToast('✓ SSpotify ya está al día (v' + CURRENT_CLIENT_VERSION + ')');
+        }
+      } catch {
+        if (manual) showToast('No se pudo comprobar actualizaciones');
+      }
+    }
+
+    (async function init() {
+      await initDb();
+      initPlaylistsUI();
+      initStorageManager();
+      await renderLibraryView();
+      loadFeaturedHome();
+      initOtaEngine();
+
+      try {
+        if (!localStorage.getItem('sspotify_mobile_notice_seen')) {
+          const banner = document.getElementById('mobileStorageNotice');
+          if (banner) banner.style.display = 'block';
+        }
+        document.getElementById('btnDismissMobileNotice')?.addEventListener('click', () => {
+          localStorage.setItem('sspotify_mobile_notice_seen', 'true');
+          const banner = document.getElementById('mobileStorageNotice');
+          if (banner) banner.style.display = 'none';
+        });
+      } catch {}
+    })();
+  </script>
+</body>
+</html>
