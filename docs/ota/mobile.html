@@ -2098,10 +2098,55 @@
     }
 
     // ==================== REPRODUCCIÓN & ANDROID MEDIASESSION ====================
+    let activePlaySeq = 0;
+    let isScrubbing = false;
+    let resumeAfterSeek = false;
+    let intendedPlaying = false;
+    let trackRetryCount = 0;
+    let pendingRecoverySeekTime = null;
+
+    function updateMediaPositionState() {
+      try {
+        if ('mediaSession' in navigator && navigator.mediaSession.setPositionState && isFinite(audio.duration) && audio.duration > 0) {
+          navigator.mediaSession.setPositionState({
+            duration: audio.duration,
+            playbackRate: audio.playbackRate || 1,
+            position: Math.max(0, Math.min(audio.currentTime || 0, audio.duration))
+          });
+        }
+      } catch {}
+    }
+
+    function commitMobileSeek(pctVal) {
+      if (!audio.src || !isFinite(audio.duration) || audio.duration <= 0) return;
+      const pct = Math.max(0, Math.min(100, Number(pctVal) || 0));
+      const maxSafe = audio.duration > 0.3 ? (audio.duration - 0.15) : audio.duration;
+      const targetSec = Math.max(0, Math.min((pct / 100) * audio.duration, maxSafe));
+      resumeAfterSeek = intendedPlaying || !audio.paused;
+      bpProgressFill.style.width = `${pct}%`;
+      mpSeekSlider.value = pct;
+      mpCurrentTime.textContent = formatDuration(targetSec);
+      try {
+        audio.currentTime = targetSec;
+      } catch {}
+    }
+
     async function playTrackByIndex(idx) {
       if (idx < 0 || idx >= currentQueue.length) return;
+      const playSeq = ++activePlaySeq;
       currentIndex = idx;
       const track = currentQueue[currentIndex];
+
+      isScrubbing = false;
+      resumeAfterSeek = false;
+      intendedPlaying = true;
+      trackRetryCount = 0;
+      pendingRecoverySeekTime = null;
+      bpProgressFill.style.width = '0%';
+      mpSeekSlider.value = 0;
+      mpCurrentTime.textContent = '0:00';
+
+      try { audio.pause(); } catch {}
 
       if (currentObjectUrl) {
         URL.revokeObjectURL(currentObjectUrl);
@@ -2110,8 +2155,11 @@
 
       // 1. Probar si está guardado en el celular (IndexedDB)
       const offlineBlob = await getAudioBlob(track.id);
+      if (playSeq !== activePlaySeq) return;
+
       if (offlineBlob) {
-        currentObjectUrl = URL.createObjectURL(offlineBlob);
+        const typedBlob = offlineBlob.type ? offlineBlob : new Blob([offlineBlob], { type: 'audio/mp4' });
+        currentObjectUrl = URL.createObjectURL(typedBlob);
         audio.src = currentObjectUrl;
       } else {
         const fullUrl = buildFullAudioProxyUrl(track);
@@ -2121,10 +2169,13 @@
           audio.src = track.streamUrl;
         } else {
           showToast('Cargando audio...');
-          audio.src = (await fetchPreviewFallbackUrl(track)) || '';
+          const fallbackUrl = (await fetchPreviewFallbackUrl(track)) || '';
+          if (playSeq !== activePlaySeq) return;
+          audio.src = fallbackUrl;
         }
       }
 
+      try { audio.load(); } catch {}
       audio.play().catch(() => {});
       updateUIForTrack(track);
 
@@ -2137,10 +2188,18 @@
           artwork: track.thumbnail ? [{ src: track.thumbnail, sizes: '512x512', type: 'image/jpeg' }] : []
         });
 
-        navigator.mediaSession.setActionHandler('play', () => audio.play());
-        navigator.mediaSession.setActionHandler('pause', () => audio.pause());
+        navigator.mediaSession.setActionHandler('play', () => { intendedPlaying = true; audio.play().catch(() => {}); });
+        navigator.mediaSession.setActionHandler('pause', () => { intendedPlaying = false; audio.pause(); });
         navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
         navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
+        try {
+          navigator.mediaSession.setActionHandler('seekto', (details) => {
+            if (details && typeof details.seekTime === 'number' && isFinite(audio.duration) && audio.duration > 0) {
+              resumeAfterSeek = intendedPlaying || !audio.paused;
+              audio.currentTime = Math.max(0, Math.min(details.seekTime, Math.max(0, audio.duration - 0.15)));
+            }
+          });
+        } catch {}
       }
     }
 
@@ -2167,9 +2226,11 @@
     function togglePlay() {
       if (!audio.src) return;
       if (audio.paused) {
+        intendedPlaying = true;
         audio.play().catch(() => {});
         updatePlayIcons(true);
       } else {
+        intendedPlaying = false;
         audio.pause();
         updatePlayIcons(false);
       }
@@ -2194,12 +2255,69 @@
     mpNext.onclick = () => playNext();
     mpPrev.onclick = () => playPrev();
 
-    audio.onplay = () => updatePlayIcons(true);
-    audio.onpause = () => updatePlayIcons(false);
-    audio.onended = () => playNext();
+    audio.onplay = () => {
+      intendedPlaying = true;
+      updatePlayIcons(true);
+      updateMediaPositionState();
+    };
+    audio.onpause = () => {
+      if (!isScrubbing && !audio.seeking) {
+        intendedPlaying = false;
+        updatePlayIcons(false);
+      }
+      updateMediaPositionState();
+    };
+    audio.onended = () => {
+      if (!isScrubbing) playNext();
+    };
+
+    audio.onloadedmetadata = () => {
+      if (isFinite(audio.duration) && audio.duration > 0) {
+        mpTotalTime.textContent = formatDuration(audio.duration);
+        if (pendingRecoverySeekTime !== null) {
+          const t = Math.max(0, Math.min(pendingRecoverySeekTime, Math.max(0, audio.duration - 0.15)));
+          pendingRecoverySeekTime = null;
+          try { audio.currentTime = t; } catch {}
+        }
+        updateMediaPositionState();
+      }
+    };
+
+    audio.onseeked = () => {
+      isScrubbing = false;
+      updateMediaPositionState();
+      if ((resumeAfterSeek || intendedPlaying) && audio.paused && audio.src) {
+        resumeAfterSeek = false;
+        audio.play().catch(() => {});
+      }
+    };
+
+    function recoverAudioPipeline() {
+      if (!audio.src || trackRetryCount >= 2 || isScrubbing) return;
+      trackRetryCount++;
+      const resumeAt = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+      const shouldPlay = intendedPlaying || !audio.paused;
+      pendingRecoverySeekTime = resumeAt;
+      try {
+        audio.load();
+        if (shouldPlay) audio.play().catch(() => {});
+      } catch {}
+    }
+
+    audio.onstalled = () => {
+      if (intendedPlaying && audio.readyState < 3) {
+        setTimeout(() => {
+          if (intendedPlaying && audio.src && (audio.paused || audio.readyState < 3) && !isScrubbing) {
+            recoverAudioPipeline();
+          }
+        }, 1200);
+      }
+    };
+    audio.onerror = () => recoverAudioPipeline();
 
     audio.ontimeupdate = () => {
-      if (!isNaN(audio.duration) && audio.duration > 0) {
+      if (isScrubbing || audio.seeking) return;
+      if (isFinite(audio.duration) && audio.duration > 0) {
         const pct = (audio.currentTime / audio.duration) * 100;
         bpProgressFill.style.width = `${pct}%`;
         mpSeekSlider.value = pct;
@@ -2208,10 +2326,29 @@
       }
     };
 
+    const startMobileScrub = () => {
+      isScrubbing = true;
+      resumeAfterSeek = intendedPlaying || !audio.paused;
+    };
+    mpSeekSlider.addEventListener('pointerdown', startMobileScrub);
+    mpSeekSlider.addEventListener('touchstart', startMobileScrub, { passive: true });
+    mpSeekSlider.addEventListener('mousedown', startMobileScrub);
+    mpSeekSlider.addEventListener('pointercancel', () => { isScrubbing = false; });
+
+    // Mientras el usuario desliza el dedo, actualizar solo la vista previa sin saturar el decoder con decenas de seeks
     mpSeekSlider.oninput = () => {
-      if (!isNaN(audio.duration)) {
-        audio.currentTime = (mpSeekSlider.value / 100) * audio.duration;
+      isScrubbing = true;
+      if (isFinite(audio.duration) && audio.duration > 0) {
+        const pct = Math.max(0, Math.min(100, Number(mpSeekSlider.value) || 0));
+        bpProgressFill.style.width = `${pct}%`;
+        mpCurrentTime.textContent = formatDuration((pct / 100) * audio.duration);
       }
+    };
+
+    mpSeekSlider.onchange = () => {
+      const val = Number(mpSeekSlider.value);
+      isScrubbing = false;
+      commitMobileSeek(val);
     };
 
     bottomPlayer.onclick = () => modalPlayer.classList.add('open');
@@ -3542,7 +3679,7 @@
     }
 
     // ==================== OVER-THE-AIR (OTA) AUTO-UPDATER ====================
-    const CURRENT_CLIENT_VERSION = '1.5.16';
+    const CURRENT_CLIENT_VERSION = '1.5.17';
 
     function initPlaylistsUI() {
       loadPlaylists();
