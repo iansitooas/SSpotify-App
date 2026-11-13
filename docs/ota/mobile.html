@@ -1900,13 +1900,18 @@
         <div class="mp-title" id="mpTitle">Título</div>
         <div class="mp-artist" id="mpArtist">Artista</div>
       </div>
-      <button class="mp-add-pl-btn" id="mpAddCurrentToPlaylist" title="Agregar a playlist">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <button class="mp-add-pl-btn" id="btnMobileSmartVol" title="Nivelación de decibeles (-14 LUFS)" style="font-size:11px; font-weight:700; padding:4px 8px; border-radius:999px; border:1px solid rgba(255,255,255,0.2); width:auto; height:auto;">
+          dB =
+        </button>
+        <button class="mp-add-pl-btn" id="mpAddCurrentToPlaylist" title="Agregar a playlist">
         <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.2">
           <circle cx="12" cy="12" r="10"></circle>
           <line x1="12" y1="8" x2="12" y2="16"></line>
           <line x1="8" y1="12" x2="16" y2="12"></line>
         </svg>
       </button>
+      </div>
     </div>
     <div class="mp-timeline">
       <input type="range" class="mp-slider" id="mpSeekSlider" min="0" max="100" value="0" step="0.1" />
@@ -2097,6 +2102,138 @@
       return url;
     }
 
+    // ==================== NIVELACIÓN UNIFORME DE DECIBELES (-14 LUFS) ====================
+    let mobAudioCtx = null;
+    let mobAnalyser = null;
+    let mobAutoGain = null;
+    let mobLimiter = null;
+    let mobTimeDomain = null;
+    let mobNormTimer = null;
+    let isMobileNormEnabled = localStorage.getItem('sspotify_mobile_loudness_norm') !== 'false';
+    const MOB_TARGET_DBFS = -14.0;
+    const MOB_GAIN_CACHE_KEY = 'sspotify_mobile_norm_gains_v1';
+    let mobGainCache = {};
+    try { mobGainCache = JSON.parse(localStorage.getItem(MOB_GAIN_CACHE_KEY) || '{}') || {}; } catch { mobGainCache = {}; }
+    let mobNormTrackKey = '';
+    let mobNormEmaDb = null;
+    let mobNormSamples = 0;
+
+    function toMobilePlayableUrl(rawUrl) {
+      if (!rawUrl) return '';
+      if (rawUrl.startsWith('blob:') || rawUrl.startsWith(window.location.origin)) return rawUrl;
+      if (window.SSpotifyNative?.hasFullAudioProxy?.()) {
+        return `https://appassets.androidplatform.net/proxy-audio?u=${encodeURIComponent(rawUrl)}`;
+      }
+      return rawUrl;
+    }
+
+    function updateMobileNormButtonUI() {
+      const btn = document.getElementById('btnMobileSmartVol');
+      if (!btn) return;
+      btn.style.color = isMobileNormEnabled ? '#1ed760' : 'rgba(255,255,255,0.6)';
+      btn.style.borderColor = isMobileNormEnabled ? '#1ed760' : 'rgba(255,255,255,0.2)';
+      btn.style.background = isMobileNormEnabled ? 'rgba(30,215,96,0.14)' : 'transparent';
+    }
+
+    function applyMobileNormSettings() {
+      updateMobileNormButtonUI();
+      if (!mobAudioCtx || !mobAutoGain || !mobLimiter) return;
+      const now = mobAudioCtx.currentTime;
+      if (isMobileNormEnabled) {
+        mobLimiter.threshold.setValueAtTime(-2.0, now);
+        mobLimiter.knee.setValueAtTime(6, now);
+        mobLimiter.ratio.setValueAtTime(12, now);
+        mobLimiter.attack.setValueAtTime(0.002, now);
+        mobLimiter.release.setValueAtTime(0.15, now);
+        const cached = mobNormTrackKey && Number.isFinite(mobGainCache[mobNormTrackKey])
+          ? Math.max(0.28, Math.min(2.8, mobGainCache[mobNormTrackKey]))
+          : 1.0;
+        mobAutoGain.gain.setTargetAtTime(cached, now, 0.08);
+      } else {
+        mobLimiter.threshold.setValueAtTime(0, now);
+        mobLimiter.ratio.setValueAtTime(1, now);
+        mobAutoGain.gain.setTargetAtTime(1.0, now, 0.08);
+      }
+    }
+
+    function resetMobileLoudnessForTrack(trackKey) {
+      mobNormTrackKey = trackKey || '';
+      mobNormEmaDb = null;
+      mobNormSamples = 0;
+      if (!mobAudioCtx || !mobAutoGain) return;
+      const cached = isMobileNormEnabled && mobNormTrackKey && Number.isFinite(mobGainCache[mobNormTrackKey])
+        ? Math.max(0.28, Math.min(2.8, mobGainCache[mobNormTrackKey]))
+        : 1.0;
+      mobAutoGain.gain.setTargetAtTime(cached, mobAudioCtx.currentTime, 0.08);
+    }
+
+    function runMobileAutoLevelStep() {
+      if (!mobAudioCtx || !mobAnalyser || !mobAutoGain || !mobTimeDomain) return;
+      if (!isMobileNormEnabled || audio.paused || audio.ended) return;
+      mobAnalyser.getFloatTimeDomainData(mobTimeDomain);
+      let sumSq = 0;
+      for (let i = 0; i < mobTimeDomain.length; i++) {
+        const s = mobTimeDomain[i];
+        sumSq += s * s;
+      }
+      const rms = Math.sqrt(sumSq / mobTimeDomain.length);
+      if (rms < 1e-4) return;
+      const rmsDb = 20 * Math.log10(rms);
+      if (rmsDb < -42) return;
+
+      mobNormEmaDb = mobNormEmaDb === null ? rmsDb : (mobNormEmaDb * 0.82 + rmsDb * 0.18);
+      mobNormSamples++;
+      const desired = Math.max(0.28, Math.min(2.8, Math.pow(10, (MOB_TARGET_DBFS - mobNormEmaDb) / 20)));
+      mobAutoGain.gain.setTargetAtTime(desired, mobAudioCtx.currentTime, 0.45);
+
+      if (mobNormTrackKey && mobNormSamples >= 10 && mobNormSamples % 8 === 0) {
+        try {
+          mobGainCache[mobNormTrackKey] = Math.round(desired * 1000) / 1000;
+          const keys = Object.keys(mobGainCache);
+          if (keys.length > 400) keys.slice(0, keys.length - 400).forEach(k => delete mobGainCache[k]);
+          localStorage.setItem(MOB_GAIN_CACHE_KEY, JSON.stringify(mobGainCache));
+        } catch {}
+      }
+    }
+
+    function initMobileAudioNormalizer(targetUrl) {
+      updateMobileNormButtonUI();
+      const canUseWebAudio = !targetUrl || targetUrl.startsWith('blob:') || targetUrl.startsWith(window.location.origin);
+      if (!canUseWebAudio) return;
+      try {
+        if (!mobAudioCtx) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) return;
+          mobAudioCtx = new AC();
+          const source = mobAudioCtx.createMediaElementSource(audio);
+          mobAnalyser = mobAudioCtx.createAnalyser();
+          mobAnalyser.fftSize = 2048;
+          mobTimeDomain = new Float32Array(mobAnalyser.fftSize);
+          mobAutoGain = mobAudioCtx.createGain();
+          mobLimiter = mobAudioCtx.createDynamicsCompressor();
+
+          applyMobileNormSettings();
+
+          source.connect(mobAnalyser);
+          mobAnalyser.connect(mobAutoGain);
+          mobAutoGain.connect(mobLimiter);
+          mobLimiter.connect(mobAudioCtx.destination);
+
+          if (!mobNormTimer) mobNormTimer = setInterval(runMobileAutoLevelStep, 250);
+        }
+        if (mobAudioCtx.state === 'suspended') {
+          mobAudioCtx.resume().catch(() => {});
+        }
+      } catch {}
+    }
+
+    document.getElementById('btnMobileSmartVol')?.addEventListener('click', () => {
+      isMobileNormEnabled = !isMobileNormEnabled;
+      localStorage.setItem('sspotify_mobile_loudness_norm', isMobileNormEnabled ? 'true' : 'false');
+      applyMobileNormSettings();
+      showToast(isMobileNormEnabled ? '🔊 Nivelación -14 dB activada (todas al mismo volumen)' : '🔈 Nivelación desactivada (decibeles originales)');
+    });
+
     // ==================== REPRODUCCIÓN & ANDROID MEDIASESSION ====================
     let activePlaySeq = 0;
     let isScrubbing = false;
@@ -2231,22 +2368,25 @@
         if (fullUrl) {
           audio.src = fullUrl;
         } else if (track.streamUrl && !/mzstatic\.com/i.test(track.streamUrl)) {
-          audio.src = track.streamUrl;
+          audio.src = toMobilePlayableUrl(track.streamUrl);
         } else {
           showToast('Cargando audio...');
           const fallbackUrl = (await fetchPreviewFallbackUrl(track)) || '';
           if (playSeq !== activePlaySeq) return;
-          audio.src = fallbackUrl;
+          audio.src = toMobilePlayableUrl(fallbackUrl);
         }
       }
 
+      initMobileAudioNormalizer(audio.src);
+      resetMobileLoudnessForTrack(track.id || `${track.artist}-${track.title}`);
       audio.play().catch(async (err) => {
         if (playSeq !== activePlaySeq || (err && err.name === 'AbortError')) return;
         const trackNow = currentQueue[currentIndex];
         if (trackNow && audio.src && audio.src.includes('/full-audio')) {
-          const fallbackUrl = await fetchPreviewFallbackUrl(trackNow);
+          const fallbackUrl = toMobilePlayableUrl(await fetchPreviewFallbackUrl(trackNow));
           if (playSeq === activePlaySeq && fallbackUrl) {
             audio.src = fallbackUrl;
+            initMobileAudioNormalizer(audio.src);
             audio.play().catch(() => {});
             return;
           }
@@ -2304,6 +2444,7 @@
     function togglePlay() {
       if (!audio.src) return;
       if (audio.paused) {
+        if (mobAudioCtx && mobAudioCtx.state === 'suspended') mobAudioCtx.resume().catch(() => {});
         intendedPlaying = true;
         audio.play().catch(() => {});
         updatePlayIcons(true);
@@ -3775,7 +3916,7 @@
     }
 
     // ==================== OVER-THE-AIR (OTA) AUTO-UPDATER ====================
-    const CURRENT_CLIENT_VERSION = '1.5.19';
+    const CURRENT_CLIENT_VERSION = '1.5.20';
 
     function initPlaylistsUI() {
       loadPlaylists();
