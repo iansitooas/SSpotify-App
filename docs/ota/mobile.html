@@ -2102,29 +2102,20 @@
       return url;
     }
 
-    // ==================== NIVELACIÓN UNIFORME DE DECIBELES (-14 LUFS) ====================
-    let mobAudioCtx = null;
-    let mobAnalyser = null;
-    let mobAutoGain = null;
-    let mobLimiter = null;
-    let mobTimeDomain = null;
-    let mobNormTimer = null;
+    // ==================== NIVELACIÓN UNIFORME DE DECIBELES (NO INTRUSIVA) ====================
+    // Nunca usa createMediaElementSource(audio) para evitar silencios de hardware en Android WebView.
+    let mobAnalyzeCtx = null;
     let isMobileNormEnabled = localStorage.getItem('sspotify_mobile_loudness_norm') !== 'false';
-    const MOB_TARGET_DBFS = -14.0;
-    const MOB_GAIN_CACHE_KEY = 'sspotify_mobile_norm_gains_v1';
+    const MOB_TARGET_DBFS = -16.0;
+    const MOB_DEFAULT_VOLUME = 0.78;
+    const MOB_GAIN_CACHE_KEY = 'sspotify_mobile_vol_norm_v2';
     let mobGainCache = {};
     try { mobGainCache = JSON.parse(localStorage.getItem(MOB_GAIN_CACHE_KEY) || '{}') || {}; } catch { mobGainCache = {}; }
     let mobNormTrackKey = '';
-    let mobNormEmaDb = null;
-    let mobNormSamples = 0;
+    let mobMeasureAbort = null;
 
     function toMobilePlayableUrl(rawUrl) {
-      if (!rawUrl) return '';
-      if (rawUrl.startsWith('blob:') || rawUrl.startsWith(window.location.origin)) return rawUrl;
-      if (window.SSpotifyNative?.hasFullAudioProxy?.()) {
-        return `https://appassets.androidplatform.net/proxy-audio?u=${encodeURIComponent(rawUrl)}`;
-      }
-      return rawUrl;
+      return rawUrl || '';
     }
 
     function updateMobileNormButtonUI() {
@@ -2137,101 +2128,88 @@
 
     function applyMobileNormSettings() {
       updateMobileNormButtonUI();
-      if (!mobAudioCtx || !mobAutoGain || !mobLimiter) return;
-      const now = mobAudioCtx.currentTime;
-      if (isMobileNormEnabled) {
-        mobLimiter.threshold.setValueAtTime(-2.0, now);
-        mobLimiter.knee.setValueAtTime(6, now);
-        mobLimiter.ratio.setValueAtTime(12, now);
-        mobLimiter.attack.setValueAtTime(0.002, now);
-        mobLimiter.release.setValueAtTime(0.15, now);
-        const cached = mobNormTrackKey && Number.isFinite(mobGainCache[mobNormTrackKey])
-          ? Math.max(0.28, Math.min(2.8, mobGainCache[mobNormTrackKey]))
-          : 1.0;
-        mobAutoGain.gain.setTargetAtTime(cached, now, 0.08);
-      } else {
-        mobLimiter.threshold.setValueAtTime(0, now);
-        mobLimiter.ratio.setValueAtTime(1, now);
-        mobAutoGain.gain.setTargetAtTime(1.0, now, 0.08);
+      if (!isMobileNormEnabled) {
+        audio.volume = 1.0;
+        return;
       }
+      const cached = mobNormTrackKey && Number.isFinite(mobGainCache[mobNormTrackKey])
+        ? Math.max(0.30, Math.min(1.0, mobGainCache[mobNormTrackKey]))
+        : MOB_DEFAULT_VOLUME;
+      audio.volume = cached;
     }
 
     function resetMobileLoudnessForTrack(trackKey) {
       mobNormTrackKey = trackKey || '';
-      mobNormEmaDb = null;
-      mobNormSamples = 0;
-      if (!mobAudioCtx || !mobAutoGain) return;
-      const cached = isMobileNormEnabled && mobNormTrackKey && Number.isFinite(mobGainCache[mobNormTrackKey])
-        ? Math.max(0.28, Math.min(2.8, mobGainCache[mobNormTrackKey]))
-        : 1.0;
-      mobAutoGain.gain.setTargetAtTime(cached, mobAudioCtx.currentTime, 0.08);
+      if (mobMeasureAbort) {
+        try { mobMeasureAbort.abort(); } catch {}
+        mobMeasureAbort = null;
+      }
+      applyMobileNormSettings();
     }
 
-    function runMobileAutoLevelStep() {
-      if (!mobAudioCtx || !mobAnalyser || !mobAutoGain || !mobTimeDomain) return;
-      if (!isMobileNormEnabled || audio.paused || audio.ended) return;
-      mobAnalyser.getFloatTimeDomainData(mobTimeDomain);
-      let sumSq = 0;
-      for (let i = 0; i < mobTimeDomain.length; i++) {
-        const s = mobTimeDomain[i];
-        sumSq += s * s;
-      }
-      const rms = Math.sqrt(sumSq / mobTimeDomain.length);
-      if (rms < 1e-4) return;
-      const rmsDb = 20 * Math.log10(rms);
-      if (rmsDb < -42) return;
-
-      mobNormEmaDb = mobNormEmaDb === null ? rmsDb : (mobNormEmaDb * 0.82 + rmsDb * 0.18);
-      mobNormSamples++;
-      const desired = Math.max(0.28, Math.min(2.8, Math.pow(10, (MOB_TARGET_DBFS - mobNormEmaDb) / 20)));
-      mobAutoGain.gain.setTargetAtTime(desired, mobAudioCtx.currentTime, 0.45);
-
-      if (mobNormTrackKey && mobNormSamples >= 10 && mobNormSamples % 8 === 0) {
-        try {
-          mobGainCache[mobNormTrackKey] = Math.round(desired * 1000) / 1000;
-          const keys = Object.keys(mobGainCache);
-          if (keys.length > 400) keys.slice(0, keys.length - 400).forEach(k => delete mobGainCache[k]);
-          localStorage.setItem(MOB_GAIN_CACHE_KEY, JSON.stringify(mobGainCache));
-        } catch {}
-      }
-    }
-
-    function initMobileAudioNormalizer(targetUrl) {
-      updateMobileNormButtonUI();
-      const canUseWebAudio = !targetUrl || targetUrl.startsWith('blob:') || targetUrl.startsWith(window.location.origin);
-      if (!canUseWebAudio) return;
+    function saveMobileNormVolume(trackKey, vol) {
+      if (!trackKey) return;
       try {
-        if (!mobAudioCtx) {
-          const AC = window.AudioContext || window.webkitAudioContext;
-          if (!AC) return;
-          mobAudioCtx = new AC();
-          const source = mobAudioCtx.createMediaElementSource(audio);
-          mobAnalyser = mobAudioCtx.createAnalyser();
-          mobAnalyser.fftSize = 2048;
-          mobTimeDomain = new Float32Array(mobAnalyser.fftSize);
-          mobAutoGain = mobAudioCtx.createGain();
-          mobLimiter = mobAudioCtx.createDynamicsCompressor();
-
-          applyMobileNormSettings();
-
-          source.connect(mobAnalyser);
-          mobAnalyser.connect(mobAutoGain);
-          mobAutoGain.connect(mobLimiter);
-          mobLimiter.connect(mobAudioCtx.destination);
-
-          if (!mobNormTimer) mobNormTimer = setInterval(runMobileAutoLevelStep, 250);
-        }
-        if (mobAudioCtx.state === 'suspended') {
-          mobAudioCtx.resume().catch(() => {});
-        }
+        mobGainCache[trackKey] = Math.round(vol * 1000) / 1000;
+        const keys = Object.keys(mobGainCache);
+        if (keys.length > 400) keys.slice(0, keys.length - 400).forEach(k => delete mobGainCache[k]);
+        localStorage.setItem(MOB_GAIN_CACHE_KEY, JSON.stringify(mobGainCache));
       } catch {}
+    }
+
+    async function measureMobileTrackLoudness(trackKey, srcUrl, playSeq) {
+      if (!isMobileNormEnabled || !trackKey || !srcUrl) return;
+      if (Number.isFinite(mobGainCache[trackKey])) return;
+      if (!srcUrl.startsWith('blob:') && !srcUrl.startsWith(window.location.origin)) return;
+
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      mobMeasureAbort = controller;
+      try {
+        const res = await fetch(srcUrl, {
+          headers: srcUrl.startsWith('blob:') ? {} : { Range: 'bytes=0-393215' },
+          signal: controller ? controller.signal : undefined
+        });
+        if (!res.ok || playSeq !== activePlaySeq) return;
+        const buf = await res.arrayBuffer();
+        if (playSeq !== activePlaySeq || !buf || buf.byteLength < 8192) return;
+
+        if (!mobAnalyzeCtx) mobAnalyzeCtx = new AC();
+        const decoded = await mobAnalyzeCtx.decodeAudioData(buf.slice(0));
+        if (playSeq !== activePlaySeq || !decoded || decoded.length === 0) return;
+
+        const ch = decoded.getChannelData(0);
+        let sumSq = 0;
+        let activeCount = 0;
+        const step = Math.max(1, Math.floor(ch.length / 40000));
+        for (let i = 0; i < ch.length; i += step) {
+          const s = ch[i];
+          if (Math.abs(s) > 0.005) {
+            sumSq += s * s;
+            activeCount++;
+          }
+        }
+        if (activeCount < 50) return;
+        const rmsDb = 20 * Math.log10(Math.sqrt(sumSq / activeCount));
+        if (!Number.isFinite(rmsDb) || rmsDb < -45) return;
+
+        const targetVol = Math.max(0.30, Math.min(1.0, Math.pow(10, (MOB_TARGET_DBFS - rmsDb) / 20)));
+        saveMobileNormVolume(trackKey, targetVol);
+        if (playSeq === activePlaySeq && isMobileNormEnabled) {
+          audio.volume = targetVol;
+        }
+      } catch {} finally {
+        if (mobMeasureAbort === controller) mobMeasureAbort = null;
+      }
     }
 
     document.getElementById('btnMobileSmartVol')?.addEventListener('click', () => {
       isMobileNormEnabled = !isMobileNormEnabled;
       localStorage.setItem('sspotify_mobile_loudness_norm', isMobileNormEnabled ? 'true' : 'false');
       applyMobileNormSettings();
-      showToast(isMobileNormEnabled ? '🔊 Nivelación -14 dB activada (todas al mismo volumen)' : '🔈 Nivelación desactivada (decibeles originales)');
+      showToast(isMobileNormEnabled ? '🔊 Nivelación uniforme activada (mismos decibeles)' : '🔈 Nivelación desactivada (decibeles originales)');
     });
 
     // ==================== REPRODUCCIÓN & ANDROID MEDIASESSION ====================
@@ -2333,6 +2311,33 @@
       } catch {}
     }
 
+    let fullAudioBlobTriedSeq = -1;
+
+    async function tryFullAudioBlobFallback(rawFullUrl, playSeq) {
+      if (!rawFullUrl || fullAudioBlobTriedSeq === playSeq) return false;
+      fullAudioBlobTriedSeq = playSeq;
+      const dlUrl = rawFullUrl.includes('dl=1') ? rawFullUrl : `${rawFullUrl}&dl=1`;
+      try {
+        showToast('Descargando audio...');
+        const res = await fetch(dlUrl);
+        if (!res.ok || playSeq !== activePlaySeq) return false;
+        const blob = await res.blob();
+        if (!blob || blob.size < 4096 || playSeq !== activePlaySeq) return false;
+        const typedBlob = blob.type ? blob : new Blob([blob], { type: 'audio/mp4' });
+        if (currentObjectUrl) {
+          try { URL.revokeObjectURL(currentObjectUrl); } catch {}
+        }
+        currentObjectUrl = URL.createObjectURL(typedBlob);
+        audio.src = currentObjectUrl;
+        await audio.play();
+        const tk = currentQueue[currentIndex];
+        measureMobileTrackLoudness(tk ? (tk.id || `${tk.artist}-${tk.title}`) : '', currentObjectUrl, playSeq);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
     async function playTrackByIndex(idx) {
       if (idx < 0 || idx >= currentQueue.length) return;
       const playSeq = ++activePlaySeq;
@@ -2343,6 +2348,7 @@
       resumeAfterSeek = false;
       intendedPlaying = true;
       trackRetryCount = 0;
+      fullAudioBlobTriedSeq = -1;
       pendingRecoverySeekTime = null;
       bpProgressFill.style.width = '0%';
       mpSeekSlider.value = 0;
@@ -2359,14 +2365,15 @@
       const offlineBlob = await getAudioBlob(track.id);
       if (playSeq !== activePlaySeq) return;
 
+      let resolvedFullUrl = '';
       if (offlineBlob) {
         const typedBlob = offlineBlob.type ? offlineBlob : new Blob([offlineBlob], { type: 'audio/mp4' });
         currentObjectUrl = URL.createObjectURL(typedBlob);
         audio.src = currentObjectUrl;
       } else {
-        const fullUrl = buildFullAudioProxyUrl(track);
-        if (fullUrl) {
-          audio.src = fullUrl;
+        resolvedFullUrl = buildFullAudioProxyUrl(track);
+        if (resolvedFullUrl) {
+          audio.src = resolvedFullUrl;
         } else if (track.streamUrl && !/mzstatic\.com/i.test(track.streamUrl)) {
           audio.src = toMobilePlayableUrl(track.streamUrl);
         } else {
@@ -2377,16 +2384,19 @@
         }
       }
 
-      initMobileAudioNormalizer(audio.src);
-      resetMobileLoudnessForTrack(track.id || `${track.artist}-${track.title}`);
-      audio.play().catch(async (err) => {
+      const trackNormKey = track.id || `${track.artist}-${track.title}`;
+      resetMobileLoudnessForTrack(trackNormKey);
+      const initialSrc = audio.src;
+      audio.play().then(() => {
+        if (playSeq === activePlaySeq) measureMobileTrackLoudness(trackNormKey, initialSrc, playSeq);
+      }).catch(async (err) => {
         if (playSeq !== activePlaySeq || (err && err.name === 'AbortError')) return;
         const trackNow = currentQueue[currentIndex];
-        if (trackNow && audio.src && audio.src.includes('/full-audio')) {
+        if (resolvedFullUrl && await tryFullAudioBlobFallback(resolvedFullUrl, playSeq)) return;
+        if (playSeq === activePlaySeq && trackNow && audio.src && audio.src.includes('/full-audio')) {
           const fallbackUrl = toMobilePlayableUrl(await fetchPreviewFallbackUrl(trackNow));
           if (playSeq === activePlaySeq && fallbackUrl) {
             audio.src = fallbackUrl;
-            initMobileAudioNormalizer(audio.src);
             audio.play().catch(() => {});
             return;
           }
@@ -2444,7 +2454,6 @@
     function togglePlay() {
       if (!audio.src) return;
       if (audio.paused) {
-        if (mobAudioCtx && mobAudioCtx.state === 'suspended') mobAudioCtx.resume().catch(() => {});
         intendedPlaying = true;
         audio.play().catch(() => {});
         updatePlayIcons(true);
@@ -2513,6 +2522,7 @@
 
     async function handleAudioPlaybackFailure() {
       if (!audio.src || isScrubbing) return;
+      const seqNow = activePlaySeq;
       if (trackRetryCount < 1 && audio.currentTime > 0.5) {
         trackRetryCount++;
         const resumeAt = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
@@ -2524,12 +2534,16 @@
           return;
         } catch {}
       }
+      if (audio.src.includes('/full-audio')) {
+        if (await tryFullAudioBlobFallback(audio.src, seqNow)) return;
+      }
+      if (seqNow !== activePlaySeq) return;
       if (trackRetryCount < 2 && audio.src.includes('/full-audio')) {
         trackRetryCount = 2;
         const track = currentQueue[currentIndex];
         if (track) {
           const fallbackUrl = await fetchPreviewFallbackUrl(track);
-          if (fallbackUrl && currentQueue[currentIndex]?.id === track.id) {
+          if (fallbackUrl && seqNow === activePlaySeq && currentQueue[currentIndex]?.id === track.id) {
             audio.src = fallbackUrl;
             if (intendedPlaying) audio.play().catch(() => {});
             return;
@@ -3916,7 +3930,7 @@
     }
 
     // ==================== OVER-THE-AIR (OTA) AUTO-UPDATER ====================
-    const CURRENT_CLIENT_VERSION = '1.5.20';
+    const CURRENT_CLIENT_VERSION = '1.5.21';
 
     function initPlaylistsUI() {
       loadPlaylists();
