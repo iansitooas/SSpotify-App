@@ -2104,8 +2104,73 @@
     let intendedPlaying = false;
     let trackRetryCount = 0;
     let pendingRecoverySeekTime = null;
+    let lastNativeMediaSyncAt = 0;
+
+    function syncNativeMediaNotification(force = true) {
+      const hasNative = window.SSpotifyNative && typeof window.SSpotifyNative.updateMediaNotification === 'function';
+      if (!hasNative) return false;
+      const now = Date.now();
+      if (!force && now - lastNativeMediaSyncAt < 3500) return true;
+      const track = currentQueue[currentIndex];
+      if (!track) return true;
+      lastNativeMediaSyncAt = now;
+      const isPlayingNow = Boolean(intendedPlaying && audio.src);
+      const posMs = Number.isFinite(audio.currentTime) ? Math.max(0, Math.floor(audio.currentTime * 1000)) : 0;
+      const rawDur = (isFinite(audio.duration) && audio.duration > 0) ? audio.duration : (Number(track.duration) || 0);
+      const durMs = rawDur > 0 ? Math.floor(rawDur * 1000) : 0;
+      try {
+        window.SSpotifyNative.updateMediaNotification(
+          track.title || 'SSpotify',
+          track.artist || '',
+          track.thumbnail || '',
+          isPlayingNow,
+          posMs,
+          durMs
+        );
+      } catch {}
+      return true;
+    }
+
+    window.__sspotifyMediaAction = (action, value) => {
+      try {
+        if (action === 'play') {
+          if (!audio.src && currentQueue.length) {
+            playTrackByIndex(currentIndex >= 0 ? currentIndex : 0);
+            return;
+          }
+          intendedPlaying = true;
+          audio.play().catch(() => {});
+          updatePlayIcons(true);
+          syncNativeMediaNotification(true);
+        } else if (action === 'pause') {
+          intendedPlaying = false;
+          audio.pause();
+          updatePlayIcons(false);
+          syncNativeMediaNotification(true);
+        } else if (action === 'toggle') {
+          togglePlay();
+        } else if (action === 'next') {
+          playNext();
+        } else if (action === 'prev') {
+          playPrev();
+        } else if (action === 'seek') {
+          const sec = (Number(value) || 0) / 1000;
+          if (isFinite(audio.duration) && audio.duration > 0) {
+            resumeAfterSeek = intendedPlaying || !audio.paused;
+            const maxSafe = audio.duration > 0.3 ? (audio.duration - 0.15) : audio.duration;
+            audio.currentTime = Math.max(0, Math.min(sec, maxSafe));
+          }
+        } else if (action === 'stop') {
+          intendedPlaying = false;
+          audio.pause();
+          updatePlayIcons(false);
+        }
+      } catch {}
+    };
 
     function updateMediaPositionState() {
+      syncNativeMediaNotification(true);
+      if (window.SSpotifyNative && typeof window.SSpotifyNative.updateMediaNotification === 'function') return;
       try {
         if ('mediaSession' in navigator && navigator.mediaSession.setPositionState && isFinite(audio.duration) && audio.duration > 0) {
           navigator.mediaSession.setPositionState({
@@ -2179,8 +2244,9 @@
       audio.play().catch(() => {});
       updateUIForTrack(track);
 
-      // Notificación de Android y Controles de Pantalla de Bloqueo
-      if ('mediaSession' in navigator) {
+      // Notificación flotante nativa estilo Spotify (Foreground Service + MediaSessionCompat) o respaldo web
+      const usedNative = syncNativeMediaNotification(true);
+      if (!usedNative && 'mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
           title: track.title,
           artist: track.artist,
@@ -2323,6 +2389,7 @@
         mpSeekSlider.value = pct;
         mpCurrentTime.textContent = formatDuration(audio.currentTime);
         mpTotalTime.textContent = formatDuration(audio.duration);
+        syncNativeMediaNotification(false);
       }
     };
 
@@ -3679,7 +3746,7 @@
     }
 
     // ==================== OVER-THE-AIR (OTA) AUTO-UPDATER ====================
-    const CURRENT_CLIENT_VERSION = '1.5.17';
+    const CURRENT_CLIENT_VERSION = '1.5.18';
 
     function initPlaylistsUI() {
       loadPlaylists();
