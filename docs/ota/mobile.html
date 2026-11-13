@@ -2388,7 +2388,13 @@
       resetMobileLoudnessForTrack(trackNormKey);
       const initialSrc = audio.src;
       audio.play().then(() => {
-        if (playSeq === activePlaySeq) measureMobileTrackLoudness(trackNormKey, initialSrc, playSeq);
+        if (playSeq === activePlaySeq) {
+          setTimeout(() => {
+            if (playSeq === activePlaySeq && !audio.paused) {
+              measureMobileTrackLoudness(trackNormKey, initialSrc, playSeq);
+            }
+          }, 600);
+        }
       }).catch(async (err) => {
         if (playSeq !== activePlaySeq || (err && err.name === 'AbortError')) return;
         const trackNow = currentQueue[currentIndex];
@@ -3930,7 +3936,7 @@
     }
 
     // ==================== OVER-THE-AIR (OTA) AUTO-UPDATER ====================
-    const CURRENT_CLIENT_VERSION = '1.5.21';
+    const CURRENT_CLIENT_VERSION = '1.5.22';
 
     function initPlaylistsUI() {
       loadPlaylists();
