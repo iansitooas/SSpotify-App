@@ -2209,6 +2209,9 @@
       isMobileNormEnabled = !isMobileNormEnabled;
       localStorage.setItem('sspotify_mobile_loudness_norm', isMobileNormEnabled ? 'true' : 'false');
       applyMobileNormSettings();
+      if (window.SSpotifyNative?.nativeSetLoudnessNorm) {
+        try { window.SSpotifyNative.nativeSetLoudnessNorm(isMobileNormEnabled); } catch {}
+      }
       showToast(isMobileNormEnabled ? '🔊 Nivelación uniforme activada (mismos decibeles)' : '🔈 Nivelación desactivada (decibeles originales)');
     });
 
@@ -2298,18 +2301,86 @@
     }
 
     function commitMobileSeek(pctVal) {
-      if (!audio.src || !isFinite(audio.duration) || audio.duration <= 0) return;
+      const dur = useNativeAudio() ? nativeDurationSec : audio.duration;
+      if ((!useNativeAudio() && !audio.src) || !isFinite(dur) || dur <= 0) return;
       const pct = Math.max(0, Math.min(100, Number(pctVal) || 0));
-      const maxSafe = audio.duration > 0.3 ? (audio.duration - 0.15) : audio.duration;
-      const targetSec = Math.max(0, Math.min((pct / 100) * audio.duration, maxSafe));
-      resumeAfterSeek = intendedPlaying || !audio.paused;
+      const maxSafe = dur > 0.3 ? (dur - 0.15) : dur;
+      const targetSec = Math.max(0, Math.min((pct / 100) * dur, maxSafe));
       bpProgressFill.style.width = `${pct}%`;
       mpSeekSlider.value = pct;
       mpCurrentTime.textContent = formatDuration(targetSec);
+      if (useNativeAudio()) {
+        nativeCurrentSec = targetSec;
+        try { window.SSpotifyNative.nativeSeekTo(Math.floor(targetSec * 1000)); } catch {}
+        return;
+      }
+      resumeAfterSeek = intendedPlaying || !audio.paused;
       try {
         audio.currentTime = targetSec;
       } catch {}
     }
+
+    const useNativeAudio = () => Boolean(window.SSpotifyNative && typeof window.SSpotifyNative.nativePlayTrack === 'function');
+    let nativeIsPlaying = false;
+    let nativeCurrentSec = 0;
+    let nativeDurationSec = 0;
+
+    async function pushOfflineBlobToNative(trackKey, blob) {
+      if (!window.SSpotifyNative?.nativeWriteOfflineChunk || !blob) return false;
+      try {
+        if (window.SSpotifyNative.nativeHasCachedOfflineFile?.(trackKey)) return true;
+        const buf = await blob.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        const CHUNK = 196608;
+        for (let off = 0; off < bytes.length; off += CHUNK) {
+          const slice = bytes.subarray(off, Math.min(bytes.length, off + CHUNK));
+          let bin = '';
+          for (let i = 0; i < slice.length; i += 8192) {
+            bin += String.fromCharCode.apply(null, slice.subarray(i, Math.min(slice.length, i + 8192)));
+          }
+          const ok = window.SSpotifyNative.nativeWriteOfflineChunk(trackKey, btoa(bin), off === 0);
+          if (!ok) return false;
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    window.__sspotifyNativePlayerState = async (seq, isPlayingNow, posMs, durMs, stateName, errMsg) => {
+      if (seq !== activePlaySeq) return;
+      nativeIsPlaying = Boolean(isPlayingNow);
+      intendedPlaying = nativeIsPlaying;
+      nativeCurrentSec = Math.max(0, Number(posMs || 0) / 1000);
+      nativeDurationSec = Math.max(0, Number(durMs || 0) / 1000);
+      updatePlayIcons(nativeIsPlaying);
+
+      if (!isScrubbing && nativeDurationSec > 0) {
+        const pct = Math.max(0, Math.min(100, (nativeCurrentSec / nativeDurationSec) * 100));
+        bpProgressFill.style.width = `${pct}%`;
+        mpSeekSlider.value = pct;
+        mpCurrentTime.textContent = formatDuration(nativeCurrentSec);
+        mpTotalTime.textContent = formatDuration(nativeDurationSec);
+      }
+
+      if (stateName === 'completed' && !isScrubbing) {
+        playNext();
+      } else if (stateName === 'error') {
+        const track = currentQueue[currentIndex];
+        if (trackRetryCount < 1 && track) {
+          trackRetryCount = 1;
+          const fallbackUrl = await fetchPreviewFallbackUrl(track);
+          if (fallbackUrl && seq === activePlaySeq) {
+            window.SSpotifyNative.nativePlayTrack(
+              seq, '', '', fallbackUrl, '',
+              track.title || 'SSpotify', track.artist || '', track.thumbnail || '', isMobileNormEnabled
+            );
+            return;
+          }
+        }
+        if (errMsg) showToast('⚠️ ' + errMsg);
+      }
+    };
 
     let fullAudioBlobTriedSeq = -1;
 
@@ -2359,6 +2430,39 @@
       if (currentObjectUrl) {
         URL.revokeObjectURL(currentObjectUrl);
         currentObjectUrl = null;
+      }
+
+      if (useNativeAudio()) {
+        try { audio.removeAttribute('src'); audio.load(); } catch {}
+        nativeIsPlaying = true;
+        nativeCurrentSec = 0;
+        nativeDurationSec = Number(track.duration) || 0;
+        mpTotalTime.textContent = nativeDurationSec > 0 ? formatDuration(nativeDurationSec) : '0:00';
+        updateUIForTrack(track);
+
+        const idStr = String(track?.id || '');
+        const offlineBlob = await getAudioBlob(track.id);
+        if (playSeq !== activePlaySeq) return;
+
+        if (offlineBlob && await pushOfflineBlobToNative(idStr, offlineBlob)) {
+          if (playSeq !== activePlaySeq) return;
+          window.SSpotifyNative.nativePlayOfflineTrack(
+            playSeq, idStr, track.title || 'SSpotify', track.artist || '', track.thumbnail || '', isMobileNormEnabled
+          );
+          return;
+        }
+
+        const ytId = (idStr.startsWith('yt_') && idStr.length === 14) ? idStr.slice(3) : '';
+        const artistRaw = String(track?.artist || '').trim();
+        const cleanArtist = /^(?:artista|spotify|youtube)$/i.test(artistRaw) ? '' : artistRaw;
+        const q = `${cleanArtist} ${track?.title || ''}`.trim();
+        const fallback = (track?.previewUrl || (track?.streamUrl && !/mzstatic\.com/i.test(track.streamUrl) ? track.streamUrl : '')) || '';
+        const driveId = String(track?.driveFileId || '');
+        window.SSpotifyNative.nativePlayTrack(
+          playSeq, ytId, q, fallback, driveId,
+          track.title || 'SSpotify', track.artist || '', track.thumbnail || '', isMobileNormEnabled
+        );
+        return;
       }
 
       // 1. Probar si está guardado en el celular (IndexedDB)
@@ -2458,6 +2562,25 @@
     }
 
     function togglePlay() {
+      if (useNativeAudio()) {
+        if (!currentQueue.length) return;
+        if (currentIndex < 0) {
+          playTrackByIndex(0);
+          return;
+        }
+        if (nativeIsPlaying) {
+          nativeIsPlaying = false;
+          intendedPlaying = false;
+          updatePlayIcons(false);
+          try { window.SSpotifyNative.nativePause(); } catch {}
+        } else {
+          nativeIsPlaying = true;
+          intendedPlaying = true;
+          updatePlayIcons(true);
+          try { window.SSpotifyNative.nativeResume(); } catch {}
+        }
+        return;
+      }
       if (!audio.src) return;
       if (audio.paused) {
         intendedPlaying = true;
@@ -2476,8 +2599,14 @@
     }
 
     function playPrev() {
-      if (audio.currentTime > 3) {
-        audio.currentTime = 0;
+      const cur = useNativeAudio() ? nativeCurrentSec : audio.currentTime;
+      if (cur > 3) {
+        if (useNativeAudio()) {
+          nativeCurrentSec = 0;
+          try { window.SSpotifyNative.nativeSeekTo(0); } catch {}
+        } else {
+          audio.currentTime = 0;
+        }
       } else if (currentIndex > 0) {
         playTrackByIndex(currentIndex - 1);
       }
@@ -2585,7 +2714,7 @@
 
     const startMobileScrub = () => {
       isScrubbing = true;
-      resumeAfterSeek = intendedPlaying || !audio.paused;
+      resumeAfterSeek = intendedPlaying || (useNativeAudio() ? nativeIsPlaying : !audio.paused);
     };
     mpSeekSlider.addEventListener('pointerdown', startMobileScrub);
     mpSeekSlider.addEventListener('touchstart', startMobileScrub, { passive: true });
@@ -2595,10 +2724,11 @@
     // Mientras el usuario desliza el dedo, actualizar solo la vista previa sin saturar el decoder con decenas de seeks
     mpSeekSlider.oninput = () => {
       isScrubbing = true;
-      if (isFinite(audio.duration) && audio.duration > 0) {
+      const dur = useNativeAudio() ? nativeDurationSec : audio.duration;
+      if (isFinite(dur) && dur > 0) {
         const pct = Math.max(0, Math.min(100, Number(mpSeekSlider.value) || 0));
         bpProgressFill.style.width = `${pct}%`;
-        mpCurrentTime.textContent = formatDuration((pct / 100) * audio.duration);
+        mpCurrentTime.textContent = formatDuration((pct / 100) * dur);
       }
     };
 
@@ -3936,7 +4066,7 @@
     }
 
     // ==================== OVER-THE-AIR (OTA) AUTO-UPDATER ====================
-    const CURRENT_CLIENT_VERSION = '1.5.22';
+    const CURRENT_CLIENT_VERSION = '1.5.23';
 
     function initPlaylistsUI() {
       loadPlaylists();
