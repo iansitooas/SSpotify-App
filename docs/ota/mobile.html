@@ -2240,8 +2240,20 @@
         }
       }
 
-      try { audio.load(); } catch {}
-      audio.play().catch(() => {});
+      audio.play().catch(async (err) => {
+        if (playSeq !== activePlaySeq || (err && err.name === 'AbortError')) return;
+        const trackNow = currentQueue[currentIndex];
+        if (trackNow && audio.src && audio.src.includes('/full-audio')) {
+          const fallbackUrl = await fetchPreviewFallbackUrl(trackNow);
+          if (playSeq === activePlaySeq && fallbackUrl) {
+            audio.src = fallbackUrl;
+            audio.play().catch(() => {});
+            return;
+          }
+        }
+        const nativeErr = window.SSpotifyNative?.getLastFullAudioError ? window.SSpotifyNative.getLastFullAudioError() : '';
+        if (nativeErr) showToast('⚠️ ' + nativeErr);
+      });
       updateUIForTrack(track);
 
       // Notificación flotante nativa estilo Spotify (Foreground Service + MediaSessionCompat) o respaldo web
@@ -2358,28 +2370,45 @@
       }
     };
 
-    function recoverAudioPipeline() {
-      if (!audio.src || trackRetryCount >= 2 || isScrubbing) return;
-      trackRetryCount++;
-      const resumeAt = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
-      const shouldPlay = intendedPlaying || !audio.paused;
-      pendingRecoverySeekTime = resumeAt;
-      try {
-        audio.load();
-        if (shouldPlay) audio.play().catch(() => {});
-      } catch {}
+    async function handleAudioPlaybackFailure() {
+      if (!audio.src || isScrubbing) return;
+      if (trackRetryCount < 1 && audio.currentTime > 0.5) {
+        trackRetryCount++;
+        const resumeAt = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+        const shouldPlay = intendedPlaying || !audio.paused;
+        pendingRecoverySeekTime = resumeAt;
+        try {
+          audio.load();
+          if (shouldPlay) audio.play().catch(() => {});
+          return;
+        } catch {}
+      }
+      if (trackRetryCount < 2 && audio.src.includes('/full-audio')) {
+        trackRetryCount = 2;
+        const track = currentQueue[currentIndex];
+        if (track) {
+          const fallbackUrl = await fetchPreviewFallbackUrl(track);
+          if (fallbackUrl && currentQueue[currentIndex]?.id === track.id) {
+            audio.src = fallbackUrl;
+            if (intendedPlaying) audio.play().catch(() => {});
+            return;
+          }
+        }
+        const nativeErr = window.SSpotifyNative?.getLastFullAudioError ? window.SSpotifyNative.getLastFullAudioError() : '';
+        if (nativeErr) showToast('⚠️ ' + nativeErr);
+      }
     }
 
     audio.onstalled = () => {
-      if (intendedPlaying && audio.readyState < 3) {
+      if (intendedPlaying && audio.currentTime > 0.5 && audio.readyState < 3) {
         setTimeout(() => {
-          if (intendedPlaying && audio.src && (audio.paused || audio.readyState < 3) && !isScrubbing) {
-            recoverAudioPipeline();
+          if (intendedPlaying && audio.src && audio.currentTime > 0.5 && (audio.paused || audio.readyState < 3) && !isScrubbing) {
+            handleAudioPlaybackFailure();
           }
-        }, 1200);
+        }, 4500);
       }
     };
-    audio.onerror = () => recoverAudioPipeline();
+    audio.onerror = () => { handleAudioPlaybackFailure(); };
 
     audio.ontimeupdate = () => {
       if (isScrubbing || audio.seeking) return;
@@ -2531,7 +2560,7 @@
         const fullUrl = buildFullAudioProxyUrl(track);
         if (fullUrl) {
           try {
-            const fullRes = await fetch(fullUrl);
+            const fullRes = await fetch(fullUrl + '&dl=1');
             if (fullRes.ok) {
               const candidate = await fullRes.blob();
               if (candidate && candidate.size > 50000) {
@@ -3746,7 +3775,7 @@
     }
 
     // ==================== OVER-THE-AIR (OTA) AUTO-UPDATER ====================
-    const CURRENT_CLIENT_VERSION = '1.5.18';
+    const CURRENT_CLIENT_VERSION = '1.5.19';
 
     function initPlaylistsUI() {
       loadPlaylists();
@@ -3914,18 +3943,48 @@
         } catch {}
       }
 
+      let pendingApkUpdateVersion = '';
+      if (window.SSpotifyNative?.getPendingApkVersion) {
+        try { pendingApkUpdateVersion = window.SSpotifyNative.getPendingApkVersion() || ''; } catch {}
+      }
+
       // Notificación enviada desde Android cuando se descarga una actualización OTA
       window.onOtaUpdateReady = function(newVersion) {
+        if (pendingApkUpdateVersion) return;
         const banner = document.getElementById('otaUpdateBanner');
         const num = document.getElementById('otaVersionNum');
         const btn = document.getElementById('btnCheckMobileUpdates');
+        const reloadBtn = document.getElementById('btnReloadOtaApp');
         if (num) num.textContent = newVersion;
+        if (reloadBtn) reloadBtn.textContent = 'Actualizar ahora';
         if (banner) banner.style.display = 'flex';
         if (btn) btn.classList.add('has-update');
         showToast('✨ Nueva versión v' + newVersion + ' descargada');
       };
 
+      // Notificación enviada desde Android cuando hay un nuevo APK completo descargado automáticamente
+      window.onApkUpdateReady = function(newVersion) {
+        pendingApkUpdateVersion = newVersion || '';
+        const banner = document.getElementById('otaUpdateBanner');
+        const num = document.getElementById('otaVersionNum');
+        const btn = document.getElementById('btnCheckMobileUpdates');
+        const reloadBtn = document.getElementById('btnReloadOtaApp');
+        if (num) num.textContent = newVersion;
+        if (reloadBtn) reloadBtn.textContent = 'Instalar APK';
+        if (banner) banner.style.display = 'flex';
+        if (btn) btn.classList.add('has-update');
+        showToast('📲 Actualización v' + newVersion + ' lista para instalar');
+      };
+
+      if (pendingApkUpdateVersion) {
+        window.onApkUpdateReady(pendingApkUpdateVersion);
+      }
+
       document.getElementById('btnReloadOtaApp')?.addEventListener('click', () => {
+        if (pendingApkUpdateVersion && window.SSpotifyNative?.installPendingApkUpdate) {
+          window.SSpotifyNative.installPendingApkUpdate();
+          return;
+        }
         if (window.SSpotifyNative && window.SSpotifyNative.reloadApp) {
           window.SSpotifyNative.reloadApp();
         } else {
