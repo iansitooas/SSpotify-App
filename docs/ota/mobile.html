@@ -2535,14 +2535,19 @@
         mpTotalTime.textContent = nativeDurationSec > 0 ? formatDuration(nativeDurationSec) : '0:00';
         updateUIForTrack(track);
 
+        const matchedSaved = findMatchingSavedTrack(track);
         const idStr = String(track?.id || '');
-        const offlineBlob = await getAudioBlob(track.id);
+        const offlineIdStr = String((matchedSaved && matchedSaved.id) || idStr);
+        let offlineBlob = await getAudioBlob(track.id);
+        if (!offlineBlob && matchedSaved && matchedSaved.id !== track.id) {
+          offlineBlob = await getAudioBlob(matchedSaved.id);
+        }
         if (playSeq !== activePlaySeq) return;
 
-        if (offlineBlob && await pushOfflineBlobToNative(idStr, offlineBlob)) {
+        if (offlineBlob && await pushOfflineBlobToNative(offlineIdStr, offlineBlob)) {
           if (playSeq !== activePlaySeq) return;
           window.SSpotifyNative.nativePlayOfflineTrack(
-            playSeq, idStr, track.title || 'SSpotify', track.artist || '', track.thumbnail || '', isMobileNormEnabled
+            playSeq, offlineIdStr, track.title || matchedSaved?.title || 'SSpotify', track.artist || matchedSaved?.artist || '', track.thumbnail || matchedSaved?.thumbnail || '', isMobileNormEnabled
           );
           return;
         }
@@ -2552,7 +2557,7 @@
         const cleanArtist = /^(?:artista|spotify|youtube)$/i.test(artistRaw) ? '' : artistRaw;
         const q = `${cleanArtist} ${track?.title || ''}`.trim();
         const fallback = (track?.previewUrl || (track?.streamUrl && !/mzstatic\.com/i.test(track.streamUrl) ? track.streamUrl : '')) || '';
-        const driveId = String(track?.driveFileId || '');
+        const driveId = String(track?.driveFileId || matchedSaved?.driveFileId || '');
         window.SSpotifyNative.nativePlayTrack(
           playSeq, ytId, q, fallback, driveId,
           track.title || 'SSpotify', track.artist || '', track.thumbnail || '', isMobileNormEnabled
@@ -2560,8 +2565,12 @@
         return;
       }
 
-      // 1. Probar si está guardado en el celular (IndexedDB)
-      const offlineBlob = await getAudioBlob(track.id);
+      // 1. Probar si está guardado en el celular (IndexedDB), incluyendo variantes (Lyrics, Ns Cover, etc.)
+      const matchedSavedWeb = findMatchingSavedTrack(track);
+      let offlineBlob = await getAudioBlob(track.id);
+      if (!offlineBlob && matchedSavedWeb && matchedSavedWeb.id !== track.id) {
+        offlineBlob = await getAudioBlob(matchedSavedWeb.id);
+      }
       if (playSeq !== activePlaySeq) return;
 
       let resolvedFullUrl = '';
@@ -3208,17 +3217,157 @@
       return '';
     }
 
+    // ==================== DETECCIÓN DE MÚSICAS EQUIVALENTES (EVITAR DUPLICADOS / VARIANTES LYRICS / NS COVER) ====================
+    const CANONICAL_GENERIC_ARTISTS = new Set([
+      'youtube', 'spotify', 'artista', 'unknown', 'desconocido', 'music', 'musica',
+      'topic', 'vevo', 'lyrics', 'letras', 'letra', 'cover', 'covers', 'audio',
+      'video', 'oficial', 'official', 'varios artistas', 'various artists'
+    ]);
+    const CANONICAL_NOISE_PHRASES = /\b(?:ns\s+cover|cover\s+audio|video\s+oficial|official\s+music\s+video|official\s+video|music\s+video|video\s+musical|audio\s+oficial|official\s+audio|official\s+lyric\s+video|lyric\s+video|video\s+lyric|official\s+lyrics|official\s+lyric|con\s+letra|sub\s+espanol|en\s+espanol|full\s+hd|auto\s+generated\s+by\s+youtube|prod\.?\s+by\s+[a-z0-9_]+)\b/gi;
+    const CANONICAL_NOISE_WORDS = new Set([
+      'lyrics', 'lyric', 'letra', 'letras', 'cover', 'ns', 'official', 'oficial',
+      'video', 'audio', 'visualizer', 'visualiser', 'karaoke', 'instrumental',
+      'acustico', 'acoustic', 'remastered', 'remasterizado', 'hd', 'hq', '4k',
+      '8k', '1080p', '720p', 'topic', 'vevo', 'explicit', 'clean', 'version',
+      'completa', 'full', 'mp3', 'mv', 'clip', 'sub', 'traducida', 'traducido'
+    ]);
+    const CANONICAL_VARIANT_TAG_REGEX = /\b(?:ns\s+cover|cover|lyrics?|letras?|karaoke|visualizer|visualiser|audio\s+oficial|official\s+audio|video\s+lyric|lyric\s+video)\b/i;
+
+    function cleanCanonicalSegmentWords(str) {
+      const words = String(str || '').match(/[a-z0-9]+/g) || [];
+      const filtered = words.filter(w => !CANONICAL_NOISE_WORDS.has(w));
+      return filtered.join(' ');
+    }
+
+    function parseCanonicalTrack(item) {
+      let rawTitle = String(item?.title || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      let rawArtist = String(item?.artist || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const hasRemix = /\bremix\b/.test(rawTitle);
+      const hasVariantTag = CANONICAL_VARIANT_TAG_REGEX.test(rawTitle);
+
+      rawTitle = rawTitle.replace(/\([^)]*\)|\[[^\]]*\]|\{[^}]*\}|【[^】]*】/g, ' ');
+      if (hasRemix && !/\bremix\b/.test(rawTitle)) rawTitle += ' remix';
+      rawTitle = rawTitle.replace(/\b(?:feat|ft|featuring)\.?\s+[^-|/|:]+/g, ' ');
+      rawTitle = rawTitle.replace(CANONICAL_NOISE_PHRASES, ' ');
+      rawArtist = rawArtist.replace(/\([^)]*\)|\[[^\]]*\]/g, ' ').replace(CANONICAL_NOISE_PHRASES, ' ');
+
+      const rawParts = rawTitle.split(/(?:\s+[-–—|:]+\s+|\s*\/\/\s*|\s+\|\s+)/);
+      const segments = rawParts.map(cleanCanonicalSegmentWords).filter(Boolean);
+      const fullTitle = cleanCanonicalSegmentWords(rawTitle);
+      let artistClean = cleanCanonicalSegmentWords(rawArtist);
+      if (CANONICAL_GENERIC_ARTISTS.has(artistClean)) artistClean = '';
+
+      const artistTokens = new Set((artistClean.match(/[a-z0-9]+/g) || []).filter(w => w.length >= 2 && !CANONICAL_GENERIC_ARTISTS.has(w)));
+      const candidates = [];
+      if (fullTitle) {
+        candidates.push({ title: fullTitle, artistTokens: new Set(artistTokens) });
+        if (segments.length === 1 && hasVariantTag && fullTitle.length >= 4) {
+          candidates.push({ title: fullTitle, artistTokens: new Set() });
+        }
+      }
+
+      if (segments.length >= 2) {
+        const first = segments[0];
+        const last = segments[segments.length - 1];
+        const midAndLast = segments.slice(1).join(' ');
+        const firstAndMid = segments.slice(0, -1).join(' ');
+        const addCand = (tPart, aPart) => {
+          if (!tPart) return;
+          const toks = new Set(artistTokens);
+          (aPart.match(/[a-z0-9]+/g) || []).forEach(w => { if (w.length >= 2 && !CANONICAL_GENERIC_ARTISTS.has(w)) toks.add(w); });
+          candidates.push({ title: tPart, artistTokens: toks });
+        };
+        addCand(midAndLast, first);
+        addCand(firstAndMid, last);
+        if (segments.length > 2) {
+          addCand(last, first);
+          addCand(first, last);
+        }
+      }
+      return { fullTitle, segments, artistTokens, candidates, hasRemix };
+    }
+
+    function isSameCanonicalTrack(a, b) {
+      if (!a || !b) return false;
+      if (a.id && b.id && a.id === b.id) return true;
+      const pa = parseCanonicalTrack(a);
+      const pb = parseCanonicalTrack(b);
+      if (!pa.fullTitle || !pb.fullTitle) return false;
+      if (pa.hasRemix !== pb.hasRemix) return false;
+      if (pa.fullTitle === pb.fullTitle) {
+        if (!pa.artistTokens.size || !pb.artistTokens.size) return true;
+        for (const w of pa.artistTokens) if (w.length >= 3 && pb.artistTokens.has(w)) return true;
+        if (pa.segments.length >= 2) return true;
+      }
+      for (const ca of pa.candidates) {
+        for (const cb of pb.candidates) {
+          if (ca.title === cb.title && ca.title.length >= 2) {
+            const hasA = ca.artistTokens.size > 0;
+            const hasB = cb.artistTokens.size > 0;
+            if (!hasA || !hasB) return true;
+            for (const w of ca.artistTokens) {
+              if (w.length >= 3 && cb.artistTokens.has(w)) return true;
+            }
+          }
+        }
+      }
+      const checkCombined = (single, multi) => {
+        for (const cm of multi.candidates) {
+          if (!cm.title || !cm.artistTokens.size) continue;
+          if (single.fullTitle.includes(cm.title) && single.fullTitle !== cm.title) {
+            const rem = single.fullTitle.replace(cm.title, ' ').match(/[a-z0-9]+/g) || [];
+            if (
+              rem.length > 0 &&
+              rem.some(w => w.length >= 3 && cm.artistTokens.has(w)) &&
+              rem.every(w => w.length <= 2 || cm.artistTokens.has(w))
+            ) {
+              return true;
+            }
+          }
+        }
+        return false;
+      };
+      if (checkCombined(pa, pb) || checkCombined(pb, pa)) return true;
+      return false;
+    }
+
+    function findMatchingSavedTrack(track) {
+      if (!track || !Array.isArray(savedTracks)) return null;
+      const exact = savedTracks.find(t => t.id === track.id);
+      if (exact) return exact;
+      return savedTracks.find(t => isSameCanonicalTrack(t, track)) || null;
+    }
+
     // ==================== DESCARGA OFFLINE AL CELULAR & GOOGLE DRIVE ====================
     async function handleDownloadTrack(track, btnEl, forcedMode = '') {
       const mode = forcedMode || currentStorageMode || 'local';
-      const existingSaved = savedTracks.find(t => t.id === track.id);
+      const existingSaved = findMatchingSavedTrack(track);
       if (existingSaved && !forcedMode) {
-        // Eliminar del celular
-        await deleteTrackOffline(track.id);
-        savedTracks = await getSavedTracks();
-        showToast(`🗑️ "${track.title}" eliminada de tu celular.`);
-        renderAllViews();
+        // Si ya está descargada (o es una variante Lyrics / Ns Cover de una ya descargada), reproducirla sin descargar duplicados
+        const idxInQueue = currentQueue.findIndex(t => t && isSameCanonicalTrack(t, existingSaved));
+        if (idxInQueue >= 0) {
+          playTrackByIndex(idxInQueue);
+        } else {
+          currentQueue = [existingSaved, ...savedTracks.filter(t => t.id !== existingSaved.id)];
+          playTrackByIndex(0);
+        }
+        showToast(`▶️ Reproduciendo "${existingSaved.title}" (ya descargada)`);
         return;
+      }
+      if (existingSaved && forcedMode) {
+        const existingBlob = await getAudioBlob(existingSaved.id);
+        if (existingBlob) {
+          if ((mode === 'drive' || mode === 'both') && driveAccountEmail && !existingSaved.driveFileId) {
+            const uploadedId = await uploadBlobToMobileDrive(existingSaved, existingBlob);
+            if (uploadedId) {
+              existingSaved.driveFileId = uploadedId;
+              existingSaved.storageMode = 'both';
+              await saveTrackOffline(existingSaved, existingBlob);
+              savedTracks = await getSavedTracks();
+            }
+          }
+          return;
+        }
       }
 
       if (btnEl) btnEl.textContent = 'Descargando...';
@@ -3516,8 +3665,8 @@
     function createTrackRow(track, listRef, index, options = {}) {
       cacheTrack(track);
       const current = currentQueue[currentIndex];
-      const isPlaying = current && current.id === track.id;
-      const savedObj = savedTracks.find(t => t.id === track.id);
+      const isPlaying = current && (current.id === track.id || isSameCanonicalTrack(current, track));
+      const savedObj = findMatchingSavedTrack(track);
       const isSaved = Boolean(savedObj);
       const savedBoth = savedObj && savedObj.storageMode === 'both';
 
@@ -3533,7 +3682,7 @@
         </div>
         <div class="track-right-actions">
           <button class="btn-dl ${isSaved ? 'saved' : ''}">
-            ${savedBoth ? '🔄 Ambos' : (isSaved ? '✓ Guardada' : (currentStorageMode === 'both' ? '🔄 Ambos' : (currentStorageMode === 'drive' ? '☁️ Drive' : '↓ Guardar')))}
+            ${savedBoth ? '🔄 Ambos' : (isSaved ? '▶ Guardada' : (currentStorageMode === 'both' ? '🔄 Ambos' : (currentStorageMode === 'drive' ? '☁️ Drive' : '↓ Guardar')))}
           </button>
           <button class="btn-more-options" title="Opciones">⋮</button>
           ${isSaved && !options.inPlaylistId ? `<button class="btn-del-mini" title="Borrar del cel">✕</button>` : ''}
@@ -3549,7 +3698,14 @@
       const dlBtn = div.querySelector('.btn-dl');
       dlBtn.onclick = (e) => {
         e.stopPropagation();
-        handleDownloadTrack(track, dlBtn);
+        const matchNow = findMatchingSavedTrack(track);
+        if (matchNow) {
+          currentQueue = listRef;
+          playTrackByIndex(index);
+          showToast(`▶️ Reproduciendo "${matchNow.title}" (ya descargada)`);
+        } else {
+          handleDownloadTrack(track, dlBtn);
+        }
       };
 
       const moreBtn = div.querySelector('.btn-more-options');
@@ -3564,7 +3720,8 @@
       if (delMini) {
         delMini.onclick = async (e) => {
           e.stopPropagation();
-          await deleteTrackOffline(track.id);
+          const targetId = savedObj ? savedObj.id : track.id;
+          await deleteTrackOffline(targetId);
           savedTracks = await getSavedTracks();
           showToast(`🗑️ "${track.title}" eliminada de tu celular.`);
           renderAllViews();
@@ -4447,7 +4604,7 @@
     }
 
     // ==================== OVER-THE-AIR (OTA) AUTO-UPDATER ====================
-    const CURRENT_CLIENT_VERSION = '1.5.30';
+    const CURRENT_CLIENT_VERSION = '1.5.31';
 
     function initPlaylistsUI() {
       loadPlaylists();
